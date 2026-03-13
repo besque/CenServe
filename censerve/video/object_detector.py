@@ -1,5 +1,5 @@
 """
-BlurBerry object detector — plates, ID cards, credit cards, Aadhaar.
+censerve object detector — plates, ID cards, credit cards, Aadhaar.
 
 Key improvements:
   - Motion gate: skips inference when scene hasn't changed (saves ~70% of YOLO calls)
@@ -75,8 +75,8 @@ def _classify(name: str, default: str) -> str:
 class PlateCardDetector:
     def __init__(
         self,
-        plate_model_path: str = "blurberry/models/plate_best.pt",
-        card_model_path:  str = "blurberry/models/card_best.pt",
+        plate_model_path: str = "censerve/models/plate_best.pt",
+        card_model_path:  str = "censerve/models/card_best.pt",
     ):
         self.plate_model = _load(plate_model_path)
         self.card_model  = _load(card_model_path)

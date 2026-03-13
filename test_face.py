@@ -1,5 +1,5 @@
 """
-BlurBerry — Webcam enrollment 
+censerve — Webcam enrollment 
 
 Controls:
   E  →  Start collecting enrollment frames 
@@ -13,8 +13,8 @@ import time
 sys.path.insert(0, ".")
 
 from shared_types import PipelineConfig
-from blurberry.video.face_pipeline import FacePipeline
-from blurberry.video.video_loop import VideoLoop
+from censerve.video.face_pipeline import FacePipeline
+from censerve.video.video_loop import VideoLoop
 
 FRAMES_NEEDED = 60   # collect 60 frames for enrollment — good balance of speed vs accuracy
 
@@ -31,7 +31,7 @@ cap = cv2.VideoCapture(0)
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
-print("\n=== BlurBerry Enrollment ===")
+print("\n=== censerve Enrollment ===")
 print("Press E to start collecting your face")
 print("Press S when done to save and start stream")
 print("Press Q to quit\n")
@@ -100,7 +100,7 @@ while True:
     cv2.putText(display, status, (10, 30),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 2)
 
-    cv2.imshow("BlurBerry — Enrollment", display)
+    cv2.imshow("censerve — Enrollment", display)
 
     key = cv2.waitKey(1) & 0xFF
 
@@ -120,7 +120,7 @@ while True:
         break   # move to stream
 
 # ── Start the actual privacy stream ──
-print("\n[BlurBerry] Starting stream...")
+print("\n[censerve] Starting stream...")
 print("Your face will NOT be blurred. All others will be.")
 print("Press Q to quit.\n")
 

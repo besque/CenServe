@@ -1,5 +1,5 @@
 """
-BlurBerry Face Recognition + Virtual Camera
+censerve Face Recognition + Virtual Camera
 
 Face enrollment and recognition with virtual camera output for Zoom/Discord integration.
 """
@@ -13,8 +13,8 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from shared_types import PipelineConfig
-from blurberry.video.virtual_video_loop import VirtualVideoLoop
-from blurberry.video.face_pipeline import FacePipeline
+from censerve.video.virtual_video_loop import VirtualVideoLoop
+from censerve.video.face_pipeline import FacePipeline
 
 # Virtual camera import
 try:
@@ -29,7 +29,7 @@ FRAMES_NEEDED = 60   # collect 60 frames for enrollment
 
 def test_face_recognition():
     """Test face recognition with virtual camera output"""
-    print("\n=== BlurBerry Face Recognition + Virtual Camera ===")
+    print("\n=== censerve Face Recognition + Virtual Camera ===")
     print("Press E to enroll your face")
     print("Press S to skip enrollment and start virtual camera stream")
     print("Press Q to quit\n")
@@ -117,7 +117,7 @@ def test_face_recognition():
             cv2.putText(display, "🎥 Virtual Camera Ready", (10, 60),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
-        cv2.imshow("BlurBerry — Face Enrollment", display)
+        cv2.imshow("censerve — Face Enrollment", display)
 
         key = cv2.waitKey(1) & 0xFF
 
@@ -137,7 +137,7 @@ def test_face_recognition():
             break
 
     # ── Start virtual camera streaming phase ──
-    print("\n[BlurBerry] Starting virtual camera stream...")
+    print("\n[censerve] Starting virtual camera stream...")
     if enrolled:
         print("Your enrolled face will NOT be blurred. All others will be.")
     else:
@@ -163,7 +163,7 @@ def test_face_recognition():
         print("Virtual camera stream stopped")
 
 if __name__ == "__main__":
-    print("🎭 BlurBerry AI - Face Recognition Virtual Camera")
+    print("🎭 censerve AI - Face Recognition Virtual Camera")
     print("=" * 60)
     
     # Check virtual camera availability

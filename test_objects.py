@@ -2,11 +2,11 @@ import sys
 sys.path.insert(0, ".")
 import cv2
 from shared_types import PipelineConfig
-from blurberry.video.face_pipeline import FacePipeline
-from blurberry.video.object_detector import PlateCardDetector
-from blurberry.video.nsfw_detector import NSFWDetector
-from blurberry.video.blur_compositor import apply_blurs, draw_debug_overlay
-from blurberry.video.tracker import MultiObjectTracker
+from censerve.video.face_pipeline import FacePipeline
+from censerve.video.object_detector import PlateCardDetector
+from censerve.video.nsfw_detector import NSFWDetector
+from censerve.video.blur_compositor import apply_blurs, draw_debug_overlay
+from censerve.video.tracker import MultiObjectTracker
 
 config = PipelineConfig()
 
@@ -66,7 +66,7 @@ while True:
     output = apply_blurs(frame, all_events, config)
     output = draw_debug_overlay(output, all_events)
 
-    cv2.imshow("BlurBerry Test", output)
+    cv2.imshow("censerve Test", output)
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 

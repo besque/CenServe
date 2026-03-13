@@ -1,5 +1,5 @@
 """
-BlurBerry Complete Virtual Camera Script
+censerve Complete Virtual Camera Script
 
 This script:
 1. Runs camera with face enrollment
@@ -19,9 +19,9 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from shared_types import PipelineConfig
-from blurberry.video.virtual_video_loop import VirtualVideoLoop
-from blurberry.video.face_pipeline import FacePipeline
-from blurberry.video.object_detector import PlateCardDetector
+from censerve.video.virtual_video_loop import VirtualVideoLoop
+from censerve.video.face_pipeline import FacePipeline
+from censerve.video.object_detector import PlateCardDetector
 
 # Virtual camera import
 try:
@@ -37,7 +37,7 @@ FRAMES_NEEDED = 60   # collect 60 frames for enrollment
 def complete_virtual_camera():
     """Complete virtual camera with face enrollment and privacy protection"""
     print("\n" + "="*60)
-    print("🎭 BlurBerry AI - Complete Virtual Camera")
+    print("🎭 censerve AI - Complete Virtual Camera")
     print("="*60)
     print("\n🔒 Privacy Protection Features:")
     print("   ✅ Face Recognition (your face stays clear)")
@@ -149,7 +149,7 @@ def complete_virtual_camera():
         cv2.putText(display, "E: Enroll | S: Start Camera | Q: Quit", (10, 720-20),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
-        cv2.imshow("BlurBerry — Complete Virtual Camera Setup", display)
+        cv2.imshow("censerve — Complete Virtual Camera Setup", display)
 
         key = cv2.waitKey(1) & 0xFF
 
@@ -223,7 +223,7 @@ def complete_virtual_camera():
         print("="*60)
 
 if __name__ == "__main__":
-    print("🎭 BlurBerry AI - Complete Privacy Virtual Camera")
+    print("🎭 censerve AI - Complete Privacy Virtual Camera")
     print("="*60)
     
     # Check virtual camera availability

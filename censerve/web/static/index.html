@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BlurBerry — Real-Time Privacy Filter</title>
+<title>censerve — Real-Time Privacy Filter</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
@@ -193,7 +193,7 @@
   <div class="glow-orb"></div>
   <div style="position:relative;z-index:1;text-align:center;display:flex;flex-direction:column;align-items:center;">
     <div class="logo-badge"><span class="logo-dot"></span>Real-Time Privacy Filter</div>
-    <h1>Blur<span>Berry</span></h1>
+    <h1>Cen<span>Serve</span></h1>
     <p class="tagline">AI-powered PII redaction for any video call</p>
     <button class="start-btn" id="startBtn" onclick="startApp()">Start Virtual Camera</button>
     <p class="hint">Opens camera — you'll enroll your face before streaming begins</p>
@@ -204,7 +204,7 @@
 <div id="app" class="page hidden" style="display:flex;flex-direction:column;">
 
   <div class="topbar">
-    <div class="topbar-logo">Blur<span>Berry</span></div>
+    <div class="topbar-logo">Cen<span>Serve</span></div>
     <div class="live-badge" id="liveBadge" style="color:var(--muted)">
       <span class="live-dot" style="background:var(--muted)"></span>
       <span id="liveText">Initialising...</span>
@@ -251,7 +251,7 @@
 
           </div>
         </div>
-        <div class="video-label" id="videoLabel">BlurBerry · Initialising</div>
+        <div class="video-label" id="videoLabel">censerve · Initialising</div>
       </div>
     </div>
 
@@ -320,7 +320,7 @@
       <div class="info-card">
         <div class="info-card-label">📡 Virtual Camera</div>
         <div class="info-card-text">
-          Select <strong style="color:var(--text)">BlurBerry Virtual Camera</strong> in Zoom, Teams, or Meet as your camera source.
+          Select <strong style="color:var(--text)">censerve Virtual Camera</strong> in Zoom, Teams, or Meet as your camera source.
         </div>
       </div>
     </div>
@@ -400,14 +400,14 @@
       badge.style.color  = 'var(--muted)';
       liveDot.style.background = 'var(--muted)';
       liveText.textContent = 'Initialising...';
-      label.textContent  = 'BlurBerry · Initialising';
+      label.textContent  = 'censerve · Initialising';
       panel.classList.add('dimmed');
 
     } else if (phase === 'ready') {
       badge.style.color  = 'var(--accent)';
       liveDot.style.background = 'var(--accent)';
       liveText.textContent = 'Ready — awaiting enrollment';
-      label.textContent  = 'BlurBerry · Press E to enroll';
+      label.textContent  = 'censerve · Press E to enroll';
       panel.classList.add('dimmed');
       document.getElementById('hintEnroll').style.display = 'flex';
 
@@ -415,7 +415,7 @@
       badge.style.color  = 'var(--amber)';
       liveDot.style.background = 'var(--amber)';
       liveText.textContent = 'Enrolling face...';
-      label.textContent  = 'BlurBerry · Scanning your face';
+      label.textContent  = 'censerve · Scanning your face';
       panel.classList.add('dimmed');
       document.getElementById('progressSection').style.display = 'block';
       // update progress
@@ -428,7 +428,7 @@
       badge.style.color  = 'var(--amber)';
       liveDot.style.background = 'var(--amber)';
       liveText.textContent = 'Enrolled — press S to stream';
-      label.textContent  = 'BlurBerry · Press S to start streaming';
+      label.textContent  = 'censerve · Press S to start streaming';
       panel.classList.add('dimmed');
       document.getElementById('hintStream').style.display = 'flex';
 
@@ -436,7 +436,7 @@
       badge.style.color  = 'var(--danger)';
       liveDot.style.background = 'var(--danger)';
       liveText.textContent = 'Live — Virtual Camera Active';
-      label.textContent  = 'BlurBerry Virtual Camera · OBS Output';
+      label.textContent  = 'censerve Virtual Camera · OBS Output';
       panel.classList.remove('dimmed');
       overlay.classList.add('hidden');
     }

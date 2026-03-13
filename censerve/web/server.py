@@ -1,7 +1,7 @@
 """
-BlurBerry Web Server
+censerve Web Server
 Phases: ready → collecting (E) → enrolled → streaming (S)
-Run:    python blurberry/web/server.py
+Run:    python censerve/web/server.py
 Open:   http://localhost:5000
 """
 
@@ -86,9 +86,9 @@ def _init_face_app():
         from insightface.app import FaceAnalysis
         _face_app = FaceAnalysis(name='buffalo_sc', providers=['CPUExecutionProvider'])
         _face_app.prepare(ctx_id=0, det_size=(320, 320))
-        print('[BlurBerry] insightface (buffalo_sc) OK')
+        print('[censerve] insightface (buffalo_sc) OK')
     except Exception as e:
-        print(f'[BlurBerry] insightface unavailable: {e}')
+        print(f'[censerve] insightface unavailable: {e}')
 
 # ── Phase 1: ready — show live preview, wait for E ────────────────────────────
 
@@ -102,7 +102,7 @@ def _ready_phase():
         with _lock:
             _jpeg = _encode_jpeg(frame)
 
-    print('[BlurBerry] Ready — waiting for E to start enrollment')
+    print('[censerve] Ready — waiting for E to start enrollment')
     _evt_start_collect.clear()
 
     while not _evt_start_collect.wait(timeout=0.05):
@@ -179,7 +179,7 @@ def _collect_phase():
         _state['enroll_progress'] = 100
         _state['enroll_msg']      = 'Enrolled!'
 
-    print('[BlurBerry] Enrolled — waiting for S to start stream')
+    print('[censerve] Enrolled — waiting for S to start stream')
     _evt_start_stream.clear()
 
     # Keep showing live preview while waiting for S
@@ -204,25 +204,25 @@ def _streaming_thread():
     try:
         import pyvirtualcam
         vcam = pyvirtualcam.Camera(width=1280, height=720, fps=30, backend='obs')
-        print('[BlurBerry] OBS virtual camera started')
+        print('[censerve] OBS virtual camera started')
     except Exception as e:
-        print(f'[BlurBerry] Virtual camera skipped: {e}')
+        print(f'[censerve] Virtual camera skipped: {e}')
 
     obj_det = None
     try:
-        from blurberry.video.object_detector import PlateCardDetector
+        from censerve.video.object_detector import PlateCardDetector
         obj_det = PlateCardDetector()
-        print('[BlurBerry] Object detector loaded')
+        print('[censerve] Object detector loaded')
     except Exception as e:
-        print(f'[BlurBerry] Object detector skipped: {e}')
+        print(f'[censerve] Object detector skipped: {e}')
 
     nsfw_detect = None
     try:
-        from blurberry.video.nsfw_detector import make_nsfw_detector
+        from censerve.video.nsfw_detector import make_nsfw_detector
         nsfw_detect = make_nsfw_detector()
-        print('[BlurBerry] NSFW detector loaded')
+        print('[censerve] NSFW detector loaded')
     except Exception as e:
-        print(f'[BlurBerry] NSFW detector skipped: {e}')
+        print(f'[censerve] NSFW detector skipped: {e}')
 
     mp_face = None
     if not _face_app:
@@ -236,7 +236,7 @@ def _streaming_thread():
     frame_id    = 0
     cached_objs = []
     cached_nsfw = []
-    print('[BlurBerry] Streaming...')
+    print('[censerve] Streaming...')
 
     while _running:
         ok, frame = _cap.read()
@@ -312,7 +312,7 @@ def _streaming_thread():
         vcam.close()
     with _lock:
         _state['phase'] = 'idle'
-    print('[BlurBerry] Stopped.')
+    print('[censerve] Stopped.')
 
 # ── Entry ──────────────────────────────────────────────────────────────────────
 
@@ -320,7 +320,7 @@ def _start_thread():
     global _running
     _running = True
     if not _init_camera():
-        print('[BlurBerry] ERROR: cannot open webcam')
+        print('[censerve] ERROR: cannot open webcam')
         _running = False
         return
     # Show first frame immediately so /video_feed has something while face app loads
@@ -407,5 +407,5 @@ def video_feed():
     return r
 
 if __name__ == '__main__':
-    print('BlurBerry → http://localhost:5000')
+    print('censerve → http://localhost:5000')
     app.run(host='0.0.0.0', port=5000, threaded=True)

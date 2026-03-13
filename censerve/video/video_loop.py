@@ -4,9 +4,9 @@ import time
 import queue
 from typing import List, Optional, Callable
 from shared_types import DetectionEvent, PipelineConfig, AV_DELAY_SECONDS
-from blurberry.video.face_pipeline import FacePipeline
-from blurberry.video.blur_compositor import apply_blurs, draw_debug_overlay
-from blurberry.video.tracker import MultiObjectTracker
+from censerve.video.face_pipeline import FacePipeline
+from censerve.video.blur_compositor import apply_blurs, draw_debug_overlay
+from censerve.video.tracker import MultiObjectTracker
 
 OUTPUT_DELAY_SECONDS = AV_DELAY_SECONDS
 
@@ -59,7 +59,7 @@ class VideoLoop:
             import numpy as np
             frame = cv2.imdecode(np.frombuffer(frame_bytes, np.uint8), cv2.IMREAD_COLOR)
             if frame is not None:
-                cv2.imshow("BlurBerry AI", frame)
+                cv2.imshow("censerve AI", frame)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     self.running = False
                     break

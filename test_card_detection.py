@@ -9,7 +9,7 @@ import os
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from blurberry.video.object_detector import PlateCardDetector
+from censerve.video.object_detector import PlateCardDetector
 
 def test_card_detection():
     """Test credit card detection with shape-based fallback"""

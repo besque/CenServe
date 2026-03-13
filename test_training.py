@@ -1,9 +1,9 @@
 import cv2, sys, time
 sys.path.insert(0, ".")
 from shared_types import PipelineConfig
-from blurberry.video.tracker import MultiObjectTracker
-from blurberry.video.object_detector import PlateCardDetector
-from blurberry.video.blur_compositor import apply_blurs
+from censerve.video.tracker import MultiObjectTracker
+from censerve.video.object_detector import PlateCardDetector
+from censerve.video.blur_compositor import apply_blurs
 
 config  = PipelineConfig()
 tracker = MultiObjectTracker(max_age=45, min_hits=1, iou_threshold=0.25)

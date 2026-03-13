@@ -20,9 +20,9 @@ except ImportError:
     print("⚠️  Virtual camera not available, using local display")
 
 from shared_types import DetectionEvent, PipelineConfig, AV_DELAY_SECONDS
-from blurberry.video.face_pipeline import FacePipeline
-from blurberry.video.blur_compositor import apply_blurs, draw_debug_overlay
-from blurberry.video.tracker import MultiObjectTracker
+from censerve.video.face_pipeline import FacePipeline
+from censerve.video.blur_compositor import apply_blurs, draw_debug_overlay
+from censerve.video.tracker import MultiObjectTracker
 
 OUTPUT_DELAY_SECONDS = AV_DELAY_SECONDS
 
@@ -101,7 +101,7 @@ class VirtualVideoLoop:
         display = frame.copy()
         
         # Title
-        cv2.putText(display, "BlurBerry AI - Virtual Camera", (20, 40),
+        cv2.putText(display, "censerve AI - Virtual Camera", (20, 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 100), 2)
         
         # Status
@@ -158,13 +158,13 @@ class VirtualVideoLoop:
                     except Exception as e:
                         print(f"⚠️  Virtual camera error: {e}")
                         # Fallback to local display
-                        cv2.imshow("BlurBerry AI - Local Display", display_frame)
+                        cv2.imshow("censerve AI - Local Display", display_frame)
                         if cv2.waitKey(1) & 0xFF == ord('q'):
                             self.running = False
                             break
                 else:
                     # Local display fallback
-                    cv2.imshow("BlurBerry AI - Local Display", display_frame)
+                    cv2.imshow("censerve AI - Local Display", display_frame)
                     if cv2.waitKey(1) & 0xFF == ord('q'):
                         self.running = False
                         break

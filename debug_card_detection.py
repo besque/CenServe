@@ -10,7 +10,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from shared_types import PipelineConfig
-from blurberry.video.object_detector import PlateCardDetector
+from censerve.video.object_detector import PlateCardDetector
 
 def debug_card_detection():
     """Debug credit card detection"""

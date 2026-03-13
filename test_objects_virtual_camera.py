@@ -1,5 +1,5 @@
 """
-BlurBerry Objects Detection + Virtual Camera
+censerve Objects Detection + Virtual Camera
 
 Runs object detection with virtual camera output for Zoom/Discord integration.
 """
@@ -13,8 +13,8 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from shared_types import PipelineConfig
-from blurberry.video.virtual_video_loop import VirtualVideoLoop
-from blurberry.video.object_detector import ObjectDetector
+from censerve.video.virtual_video_loop import VirtualVideoLoop
+from censerve.video.object_detector import ObjectDetector
 
 # Virtual camera import
 try:
@@ -27,7 +27,7 @@ except ImportError:
 
 def test_object_detection():
     """Test object detection with virtual camera output"""
-    print("\n=== BlurBerry Object Detection + Virtual Camera ===")
+    print("\n=== censerve Object Detection + Virtual Camera ===")
     print("This will detect objects and stream to virtual camera for Zoom/Discord")
     print("Press Q to quit\n")
 
@@ -68,7 +68,7 @@ def test_object_detection():
         print("Object detection virtual camera stopped")
 
 if __name__ == "__main__":
-    print("🎥 BlurBerry AI - Object Detection Virtual Camera")
+    print("🎥 censerve AI - Object Detection Virtual Camera")
     print("=" * 60)
     
     # Check virtual camera availability
