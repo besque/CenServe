@@ -10,13 +10,16 @@ import sys, os, time, threading, pickle, cv2, numpy as np
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, ROOT)
 
-from flask import Flask, Response, jsonify, send_from_directory
+from flask import Flask, Response, jsonify, send_from_directory, request
 
 app    = Flask(__name__)
 STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
 ENROLLED_DIR  = os.path.join(ROOT, 'enrolled_faces')
 ENROLLED_FILE = os.path.join(ENROLLED_DIR, 'owner.pkl')
 os.makedirs(ENROLLED_DIR, exist_ok=True)
+
+# Screen capture import
+from censerve.video.screen_capture import ScreenCapture, list_sources as _list_screen_sources
 
 # ── Shared state ───────────────────────────────────────────────────────────────
 _lock    = threading.Lock()
@@ -44,6 +47,10 @@ _evt_start_stream  = threading.Event()
 _cap          = None
 _face_app     = None
 _owner_embeds = []
+
+# Screen capture globals
+_source_mode    = 'camera'    # 'camera' or 'screen'
+_screen_capture = None        # initialised in _start_thread
 
 ENROLL_FRAMES = 30
 
@@ -239,8 +246,13 @@ def _streaming_thread():
     print('[censerve] Streaming...')
 
     while _running:
-        ok, frame = _cap.read()
-        if not ok:
+        # ── Read frame from active source ──
+        if _source_mode == 'screen' and _screen_capture:
+            ok, frame = _screen_capture.read()
+        else:
+            ok, frame = _cap.read()
+
+        if not ok or frame is None:
             time.sleep(0.01)
             continue
 
@@ -249,7 +261,8 @@ def _streaming_thread():
 
         output = frame.copy()
 
-        if s['faces']:
+        # Face detection — camera mode only
+        if _source_mode == 'camera' and s['faces']:
             if _face_app:
                 try:
                     for f in _face_app.get(frame):
@@ -273,7 +286,8 @@ def _streaming_thread():
                 except Exception:
                     pass
 
-        if frame_id % 10 == 0 and obj_det:
+        # Plate/card YOLO — camera only
+        if _source_mode == 'camera' and frame_id % 10 == 0 and obj_det:
             try:
                 cached_objs = obj_det.detect(frame, frame_id)
             except Exception:
@@ -317,12 +331,14 @@ def _streaming_thread():
 # ── Entry ──────────────────────────────────────────────────────────────────────
 
 def _start_thread():
-    global _running
+    global _running, _screen_capture
     _running = True
     if not _init_camera():
         print('[censerve] ERROR: cannot open webcam')
         _running = False
         return
+    # Initialize screen capture
+    _screen_capture = ScreenCapture()
     # Show first frame immediately so /video_feed has something while face app loads
     with _lock:
         _state['phase'] = 'starting'
@@ -389,6 +405,40 @@ def stop():
     global _running
     _running = False
     return jsonify({'ok': True})
+
+@app.route('/screens', methods=['GET'])
+def get_screens():
+    """Returns list of capturable monitors and windows."""
+    try:
+        screens = _list_screen_sources()
+    except Exception as e:
+        print(f'[Screens] {e}')
+        screens = []
+    return jsonify({'screens': screens})
+
+@app.route('/source', methods=['POST'])
+def set_source():
+    """
+    Switch between camera and screen capture.
+    Body: { mode: 'camera' } or { mode: 'screen', source: { ...source dict... } }
+    """
+    global _source_mode
+    data = request.get_json() or {}
+    mode = data.get('mode', 'camera')
+
+    if mode == 'screen':
+        source = data.get('source')
+        if not source:
+            return jsonify({'error': 'source required for screen mode'}), 400
+        if _screen_capture:
+            _screen_capture.set_source(source)
+        _source_mode = 'screen'
+        print(f'[censerve] Source → screen: {source.get("label")}')
+    else:
+        _source_mode = 'camera'
+        print('[censerve] Source → camera')
+
+    return jsonify({'ok': True, 'mode': _source_mode})
 
 def _gen():
     while True:

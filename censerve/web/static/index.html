@@ -167,6 +167,28 @@
   .switch input:checked + .slider { background: rgba(0,229,160,0.25); }
   .switch input:checked + .slider::before { transform: translateX(18px); background: var(--accent); }
 
+  /* Screen source modal */
+  .modal { position: fixed; inset: 0; z-index: 100; display: none;
+    align-items: center; justify-content: center; background: rgba(7,8,13,0.85); backdrop-filter: blur(8px); }
+  .modal.show { display: flex; }
+  .modal-content { background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 24px; max-width: 480px; width: 90%; max-height: 70vh; overflow-y: auto; }
+  .modal-header { display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+  .modal-title { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+  .modal-close { background: none; border: none; color: var(--muted); font-size: 20px;
+    cursor: pointer; padding: 4px; border-radius: 4px; transition: color 0.2s, background 0.2s; }
+  .modal-close:hover { color: var(--text); background: var(--surface); }
+  .source-list { display: flex; flex-direction: column; gap: 8px; }
+  .source-item { display: flex; align-items: center; gap: 12px; padding: 12px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+    cursor: pointer; transition: border-color 0.2s, background 0.2s; }
+  .source-item:hover { border-color: var(--muted); background: rgba(255,255,255,0.02); }
+  .source-icon { font-size: 18px; }
+  .source-info { flex: 1; }
+  .source-name { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 2px; }
+  .source-type { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; }
+
   .divider { height: 1px; background: var(--border); margin: 6px 0; }
 
   .info-card { margin-top: auto; padding: 14px; background: rgba(0,136,255,0.06);
@@ -317,6 +339,22 @@
 
       <div class="divider"></div>
 
+      <div class="toggle-card" id="card-screen" onclick="toggleScreenShare()">
+        <div class="toggle-left">
+          <div class="toggle-icon">🖥️</div>
+          <div class="toggle-info">
+            <div class="toggle-label">Screen Share</div>
+            <div class="toggle-desc">Share monitor or window</div>
+          </div>
+        </div>
+        <label class="switch" onclick="event.stopPropagation()">
+          <input type="checkbox" id="toggle-screen" onchange="toggleScreenShare()">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="divider"></div>
+
       <div class="info-card">
         <div class="info-card-label">📡 Virtual Camera</div>
         <div class="info-card-text">
@@ -328,8 +366,22 @@
   </div>
 </div>
 
+<!-- Screen Source Modal -->
+<div id="screenModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <div class="modal-title">Choose Screen Source</div>
+      <button class="modal-close" onclick="closeScreenModal()">×</button>
+    </div>
+    <div class="source-list" id="sourceList">
+      <!-- Sources will be populated here -->
+    </div>
+  </div>
+</div>
+
 <script>
   const featState = { faces: true, plates: true, cards: true, nsfw: true };
+  const sourceState = { mode: 'camera', source: null };
   let lastPhase = '';
 
   async function startApp() {
@@ -459,6 +511,121 @@
     if (cb) cb.checked = data.enabled;
     if (card) card.classList.toggle('active', !!data.enabled);
   }
+
+  async function toggleScreenShare() {
+    const cb = document.getElementById('toggle-screen');
+    const card = document.getElementById('card-screen');
+    
+    if (cb.checked) {
+      // Show source selection modal
+      await showScreenModal();
+    } else {
+      // Switch back to camera
+      sourceState.mode = 'camera';
+      sourceState.source = null;
+      await setSource('camera');
+      card.classList.remove('active');
+    }
+  }
+
+  async function showScreenModal() {
+    const modal = document.getElementById('screenModal');
+    const sourceList = document.getElementById('sourceList');
+    
+    try {
+      const res = await fetch('/screens');
+      const data = await res.json();
+      
+      sourceList.innerHTML = '';
+      
+      data.screens.forEach(source => {
+        const item = document.createElement('div');
+        item.className = 'source-item';
+        item.onclick = () => selectScreenSource(source);
+        
+        const icon = source.type === 'monitor' ? '🖥️' : '🪟';
+        
+        item.innerHTML = `
+          <div class="source-icon">${icon}</div>
+          <div class="source-info">
+            <div class="source-name">${source.label}</div>
+            <div class="source-type">${source.type}</div>
+          </div>
+        `;
+        
+        sourceList.appendChild(item);
+      });
+      
+      modal.classList.add('show');
+    } catch (e) {
+      console.error('Failed to load screens:', e);
+      // Reset checkbox on error
+      document.getElementById('toggle-screen').checked = false;
+    }
+  }
+
+  function closeScreenModal() {
+    const modal = document.getElementById('screenModal');
+    modal.classList.remove('show');
+    // Reset checkbox
+    document.getElementById('toggle-screen').checked = false;
+  }
+
+  async function selectScreenSource(source) {
+    sourceState.mode = 'screen';
+    sourceState.source = source;
+    
+    try {
+      await setSource('screen', source);
+      const card = document.getElementById('card-screen');
+      card.classList.add('active');
+      closeScreenModal();
+      
+      // Update video label
+      const label = document.getElementById('videoLabel');
+      if (sourceState.mode === 'screen') {
+        label.textContent = `censerve · Sharing: ${source.label}`;
+      }
+    } catch (e) {
+      console.error('Failed to set screen source:', e);
+      closeScreenModal();
+    }
+  }
+
+  async function setSource(mode, source = null) {
+    const body = { mode };
+    if (mode === 'screen' && source) {
+      body.source = source;
+    }
+    
+    const res = await fetch('/source', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    
+    if (!res.ok) {
+      throw new Error('Failed to set source');
+    }
+    
+    const data = await res.json();
+    return data;
+  }
+
+  // Update video label when phase changes to reflect source mode
+  const originalApplyPhase = applyPhase;
+  applyPhase = function(data) {
+    originalApplyPhase(data);
+    
+    if (data.phase === 'streaming') {
+      const label = document.getElementById('videoLabel');
+      if (sourceState.mode === 'screen' && sourceState.source) {
+        label.textContent = `censerve · Sharing: ${sourceState.source.label}`;
+      } else {
+        label.textContent = 'censerve Virtual Camera · OBS Output';
+      }
+    }
+  };
 </script>
 </body>
 </html>
