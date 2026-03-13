@@ -40,10 +40,20 @@ class TextPIIDetector:
         print(f'[TextPII] Ready ({backend})')
 
     def _run_ocr(self, small: np.ndarray):
-        results = []
+        """
+        Run EasyOCR on a BGR frame.
 
-        raw = self.reader.readtext(small)
+        EasyOCR expects RGB input; OpenCV gives us BGR, so we convert here.
+        """
+        # Convert BGR → RGB for better OCR accuracy
+        rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
+
+        results = []
+        raw = self.reader.readtext(rgb)
         for (pts, text, conf) in raw:
+            # Normalise whitespace for regex matching
+            if isinstance(text, str):
+                text = text.strip()
             results.append((pts, text, conf))
 
         return results
@@ -70,7 +80,9 @@ class TextPIIDetector:
             small = frame
             scale = 1.0
         inv = 1.0 / scale
-        CONF_THRESHOLD = 0.6
+        # Slightly relaxed confidence to make the detector more responsive
+        # during webcam tests; the caller can always add extra filtering.
+        CONF_THRESHOLD = 0.45
 
         events = []
         try:

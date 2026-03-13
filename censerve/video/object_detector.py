@@ -20,8 +20,8 @@ from shared_types import DetectionEvent
 # ─── Config ───────────────────────────────────────────────────────────────────
 
 CONF_THRESHOLD = {
-    "plate": 0.30,
-    "card":  0.35,
+    "plate": 0.28,
+    "card":  0.30,
 }
 
 BBOX_PAD = {
@@ -160,7 +160,9 @@ class PlateCardDetector:
         events = []
         for cnt in conts:
             area = cv2.contourArea(cnt)
-            if not (4000 < area < h_f * w_f * 0.35):
+            # Allow slightly smaller cards so physical cards held farther
+            # from the webcam are still picked up.
+            if not (2000 < area < h_f * w_f * 0.35):
                 continue
             peri   = cv2.arcLength(cnt, True)
             approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
@@ -172,7 +174,7 @@ class PlateCardDetector:
                 events.append(DetectionEvent(
                     type="card",
                     bbox=(max(0, x-12), max(0, y-12),
-                          min(w_f, x+w+12), min(h_f, y+h+12)),
+                          min(w_f-1, x+w+12), min(h_f-1, y+h+12)),
                     confidence=0.60,
                     frame_id=frame_id,
                     blur=True,
@@ -207,6 +209,12 @@ class PlateCardDetector:
         card_found = any(e.type == "card" for e in events)
         if not card_found:
             events.extend(self._cards_by_shape(frame, frame_id))
+
+        # Simple debug hook: log any detections so it's obvious when the
+        # models are firing even if blur logic later changes.
+        if events:
+            print(f"[ObjDet] Frame {frame_id}: "
+                  f"{[(e.type, round(e.confidence, 2)) for e in events]}")
 
         self._cached = events
         return events
