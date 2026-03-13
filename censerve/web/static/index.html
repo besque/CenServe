@@ -95,7 +95,7 @@
   .corner.bl { bottom:-1px; left:-1px; border-bottom:2px solid var(--accent); border-left:2px solid var(--accent); }
   .corner.br { bottom:-1px; right:-1px; border-bottom:2px solid var(--accent); border-right:2px solid var(--accent); }
 
-  /* Overlay (enrollment progress + key hints) */
+  /* Overlay */
   .video-overlay {
     position: absolute; inset: 0; z-index: 5; pointer-events: none;
     display: flex; flex-direction: column; justify-content: flex-end;
@@ -106,19 +106,13 @@
   .video-overlay.hidden { opacity: 0; }
 
   /* Key hint pill */
-  .key-hint {
-    display: inline-flex; align-items: center; gap: 12px;
-    margin-bottom: 14px; align-self: center;
-  }
-  .key-badge {
-    display: inline-flex; align-items: center; justify-content: center;
+  .key-hint { display: inline-flex; align-items: center; gap: 12px;
+    margin-bottom: 14px; align-self: center; }
+  .key-badge { display: inline-flex; align-items: center; justify-content: center;
     width: 36px; height: 36px; border-radius: 8px; font-weight: 700; font-size: 16px;
-    border: 2px solid; letter-spacing: 0;
-  }
-  .key-badge.accent { border-color: var(--accent); color: var(--accent);
-    background: rgba(0,229,160,0.1); }
-  .key-badge.amber  { border-color: var(--amber);  color: var(--amber);
-    background: rgba(245,158,11,0.1); }
+    border: 2px solid; letter-spacing: 0; }
+  .key-badge.accent { border-color: var(--accent); color: var(--accent); background: rgba(0,229,160,0.1); }
+  .key-badge.amber  { border-color: var(--amber);  color: var(--amber);  background: rgba(245,158,11,0.1); }
   .key-label { font-family: 'DM Mono', monospace; font-size: 13px; letter-spacing: 0.05em; }
 
   /* Progress bar */
@@ -157,7 +151,7 @@
   .toggle-card.active .toggle-icon { background: rgba(0,229,160,0.1); border-color: rgba(0,229,160,0.3); }
   .toggle-info { flex: 1; }
   .toggle-label { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.2; }
-  .toggle-desc { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; margin-top: 2px; }
+  .toggle-desc  { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; margin-top: 2px; }
 
   .switch { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
   .switch input { opacity: 0; width: 0; height: 0; }
@@ -167,27 +161,30 @@
   .switch input:checked + .slider { background: rgba(0,229,160,0.25); }
   .switch input:checked + .slider::before { transform: translateX(18px); background: var(--accent); }
 
-  /* Screen source modal */
+  /* Modal */
   .modal { position: fixed; inset: 0; z-index: 100; display: none;
-    align-items: center; justify-content: center; background: rgba(7,8,13,0.85); backdrop-filter: blur(8px); }
+    align-items: center; justify-content: center;
+    background: rgba(7,8,13,0.85); backdrop-filter: blur(8px); }
   .modal.show { display: flex; }
   .modal-content { background: var(--panel); border: 1px solid var(--border);
     border-radius: 8px; padding: 24px; max-width: 480px; width: 90%; max-height: 70vh; overflow-y: auto; }
   .modal-header { display: flex; justify-content: space-between; align-items: center;
     margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
-  .modal-title { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+  .modal-title { font-size: 16px; font-weight: 600; }
   .modal-close { background: none; border: none; color: var(--muted); font-size: 20px;
-    cursor: pointer; padding: 4px; border-radius: 4px; transition: color 0.2s, background 0.2s; }
-  .modal-close:hover { color: var(--text); background: var(--surface); }
+    cursor: pointer; padding: 4px; border-radius: 4px; transition: color 0.2s; }
+  .modal-close:hover { color: var(--text); }
   .source-list { display: flex; flex-direction: column; gap: 8px; }
   .source-item { display: flex; align-items: center; gap: 12px; padding: 12px;
     background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
-    cursor: pointer; transition: border-color 0.2s, background 0.2s; }
-  .source-item:hover { border-color: var(--muted); background: rgba(255,255,255,0.02); }
+    cursor: pointer; transition: border-color 0.2s; }
+  .source-item:hover { border-color: var(--accent); }
   .source-icon { font-size: 18px; }
   .source-info { flex: 1; }
   .source-name { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 2px; }
   .source-type { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; }
+  .modal-note { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border);
+    font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); line-height: 1.6; }
 
   .divider { height: 1px; background: var(--border); margin: 6px 0; }
 
@@ -197,19 +194,23 @@
     text-transform: uppercase; color: var(--accent2); margin-bottom: 6px; }
   .info-card-text { font-size: 12px; color: var(--muted); line-height: 1.55; }
 
+  /* Enroll progress bar (sidebar) */
+  .enroll-bar  { height: 3px; background: var(--border); border-radius: 100px; overflow: hidden; }
+  .enroll-fill { height: 100%; background: var(--amber); border-radius: 100px;
+    width: 0%; transition: width 0.15s; }
+
   @keyframes fadeUp {
     from { opacity: 0; transform: translateY(18px); }
     to   { opacity: 1; transform: translateY(0); }
   }
   @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
-
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 </style>
 </head>
 <body>
 
-<!-- LANDING -->
+<!-- ══════════════════ LANDING ══════════════════ -->
 <div id="landing" class="page">
   <div class="grid-bg"></div>
   <div class="glow-orb"></div>
@@ -218,11 +219,11 @@
     <h1>Cen<span>Serve</span></h1>
     <p class="tagline">AI-powered PII redaction for any video call</p>
     <button class="start-btn" id="startBtn" onclick="startApp()">Start Virtual Camera</button>
-    <p class="hint">Opens camera — you'll enroll your face before streaming begins</p>
+    <p class="hint" id="landingHint">Opens camera — press E to enroll your face, then S to stream</p>
   </div>
 </div>
 
-<!-- APP -->
+<!-- ══════════════════ APP ══════════════════ -->
 <div id="app" class="page hidden" style="display:flex;flex-direction:column;">
 
   <div class="topbar">
@@ -246,18 +247,18 @@
           <!-- Overlay: key hints + progress bar -->
           <div class="video-overlay" id="videoOverlay">
 
-            <!-- shown when phase = ready -->
-            <div id="hintEnroll" class="key-hint" style="display:none">
+            <!-- phase = ready -->
+            <div id="hintEnroll" class="key-hint" style="display:none;">
               <div class="key-badge accent">E</div>
               <span class="key-label" style="color:var(--accent)">Press E to start face enrollment</span>
             </div>
 
-            <!-- shown when phase = collecting -->
-            <div id="progressSection" style="display:none; width:100%;">
+            <!-- phase = collecting -->
+            <div id="progressSection" style="display:none;width:100%;">
               <div class="progress-wrap">
                 <div class="progress-info">
                   <span id="enrollMsg">Scanning...</span>
-                  <span id="enrollCount">0 / 30</span>
+                  <span id="enrollCount">0%</span>
                 </div>
                 <div class="progress-track">
                   <div class="progress-fill" id="progressFill"></div>
@@ -265,8 +266,8 @@
               </div>
             </div>
 
-            <!-- shown when phase = enrolled -->
-            <div id="hintStream" class="key-hint" style="display:none">
+            <!-- phase = enrolled -->
+            <div id="hintStream" class="key-hint" style="display:none;">
               <div class="key-badge amber">S</div>
               <span class="key-label" style="color:var(--amber)">Face enrolled — press S to start stream</span>
             </div>
@@ -339,16 +340,17 @@
 
       <div class="divider"></div>
 
-      <div class="toggle-card" id="card-screen" onclick="toggleScreenShare()">
+      <!-- Screen Share -->
+      <div class="toggle-card" id="card-screen" onclick="onScreenCardClick(event)">
         <div class="toggle-left">
           <div class="toggle-icon">🖥️</div>
           <div class="toggle-info">
             <div class="toggle-label">Screen Share</div>
-            <div class="toggle-desc">Share monitor or window</div>
+            <div class="toggle-desc" id="screenDesc">Share monitor or window</div>
           </div>
         </div>
         <label class="switch" onclick="event.stopPropagation()">
-          <input type="checkbox" id="toggle-screen" onchange="toggleScreenShare()">
+          <input type="checkbox" id="toggle-screen" onchange="onScreenCheckboxChange()">
           <span class="slider"></span>
         </label>
       </div>
@@ -358,7 +360,8 @@
       <div class="info-card">
         <div class="info-card-label">📡 Virtual Camera</div>
         <div class="info-card-text">
-          Select <strong style="color:var(--text)">censerve Virtual Camera</strong> in Zoom, Teams, or Meet as your camera source.
+          Select <strong style="color:var(--text)">censerve Virtual Camera</strong>
+          in Zoom, Teams, or Meet as your camera source.
         </div>
       </div>
     </div>
@@ -366,57 +369,69 @@
   </div>
 </div>
 
-<!-- Screen Source Modal -->
+<!-- ══════════════════ SCREEN MODAL ══════════════════ -->
 <div id="screenModal" class="modal">
   <div class="modal-content">
     <div class="modal-header">
       <div class="modal-title">Choose Screen Source</div>
       <button class="modal-close" onclick="closeScreenModal()">×</button>
     </div>
-    <div class="source-list" id="sourceList">
-      <!-- Sources will be populated here -->
+    <div class="source-list" id="sourceList"></div>
+    <div class="modal-note">
+      ℹ In screen mode: face blur and plate/card detection are disabled.<br>
+      NSFW remains active.
     </div>
   </div>
 </div>
 
 <script>
-  const featState = { faces: true, plates: true, cards: true, nsfw: true };
-  const sourceState = { mode: 'camera', source: null };
+  // ── State ──────────────────────────────────────────────────
+  const featState   = { faces:true, plates:true, cards:true, nsfw:true };
+  const sourceState = { mode:'camera', source:null };
   let lastPhase = '';
 
+  // ── Poll on load — recovers from any state on page refresh ─
+  setInterval(pollStatus, 500);
+  pollStatus();
+
+  // ── Landing button ─────────────────────────────────────────
   async function startApp() {
     const btn = document.getElementById('startBtn');
-    btn.disabled = true;
+    btn.disabled    = true;
     btn.textContent = 'Starting...';
-    await fetch('/start', { method: 'POST' });
+    try { await fetch('/start', { method:'POST' }); } catch(e) {}
+    // transition to app immediately; phases will fill in via poll
     document.getElementById('landing').classList.add('hidden');
     document.getElementById('app').classList.remove('hidden');
-    // Start video feed after app is visible so the request is not deferred by the browser
     requestAnimationFrame(function() {
-      requestAnimationFrame(function() {
-        ensureVideoFeedStarted();
-      });
+      requestAnimationFrame(ensureVideoFeedStarted);
     });
-    setInterval(pollStatus, 500);
-    pollStatus(); // run once so video feed starts as soon as backend reports starting/ready
   }
 
+  // ── Poll ───────────────────────────────────────────────────
   async function pollStatus() {
     try {
       const data = await fetch('/status').then(r => r.json());
+      // If backend is already past idle and we're still on landing — jump to app
+      if (data.phase !== 'idle' && document.getElementById('landing').style.pointerEvents !== 'none'
+          && !document.getElementById('landing').classList.contains('hidden')) {
+        document.getElementById('landing').classList.add('hidden');
+        document.getElementById('app').classList.remove('hidden');
+        ensureVideoFeedStarted();
+      }
       applyPhase(data);
       if (data.settings) applySettingsToUI(data.settings);
     } catch(e) {}
   }
 
-  function applySettingsToUI(settings) {
-    ['faces', 'plates', 'cards', 'nsfw'].forEach(function(feature) {
-      if (settings[feature] === undefined) return;
-      featState[feature] = settings[feature];
-      const card = document.getElementById('card-' + feature);
-      const cb = document.getElementById('toggle-' + feature);
-      if (card) card.classList.toggle('active', !!settings[feature]);
-      if (cb) cb.checked = !!settings[feature];
+  function applySettingsToUI(s) {
+    ['faces','plates','cards','nsfw'].forEach(function(f) {
+      if (s[f] === undefined) return;
+      featState[f] = s[f];
+      const card = document.getElementById('card-'+f);
+      const cb   = document.getElementById('toggle-'+f);
+      if (card) card.classList.toggle('active', !!s[f]);
+      if (cb)   cb.checked = !!s[f];
     });
   }
 
@@ -426,206 +441,196 @@
     img.src = '/video_feed?t=' + Date.now();
   }
 
+  // ── Phase handler — matches server phases exactly ──────────
+  // Server phases: idle | starting | ready | collecting | enrolled | streaming
   function applyPhase(data) {
     const phase = data.phase;
-    // Always start video feed as soon as backend can serve frames (fixes cached HTML / missed startApp set)
-    if (data.running && ['starting', 'ready', 'collecting', 'enrolled', 'streaming'].includes(phase)) {
-      ensureVideoFeedStarted();
-    }
     if (phase === lastPhase && phase !== 'collecting') return;
     lastPhase = phase;
 
-    const badge      = document.getElementById('liveBadge');
-    const liveText   = document.getElementById('liveText');
-    const liveDot    = badge.querySelector('.live-dot');
-    const label      = document.getElementById('videoLabel');
-    const panel      = document.getElementById('controlsPanel');
-    const overlay    = document.getElementById('videoOverlay');
+    const badge   = document.getElementById('liveBadge');
+    const liveDot = badge.querySelector('.live-dot');
+    const liveText  = document.getElementById('liveText');
+    const label     = document.getElementById('videoLabel');
+    const panel     = document.getElementById('controlsPanel');
+    const overlay   = document.getElementById('videoOverlay');
 
     // hide all overlay children first
-    document.getElementById('hintEnroll').style.display    = 'none';
+    document.getElementById('hintEnroll').style.display     = 'none';
     document.getElementById('progressSection').style.display = 'none';
-    document.getElementById('hintStream').style.display    = 'none';
+    document.getElementById('hintStream').style.display     = 'none';
     overlay.classList.remove('hidden');
 
-    if (phase === 'starting') {
-      badge.style.color  = 'var(--muted)';
+    if (phase === 'idle') {
+      badge.style.color        = 'var(--muted)';
       liveDot.style.background = 'var(--muted)';
-      liveText.textContent = 'Initialising...';
-      label.textContent  = 'censerve · Initialising';
+      liveText.textContent = 'Idle';
+      label.textContent    = 'censerve · Idle';
       panel.classList.add('dimmed');
 
+    } else if (phase === 'starting') {
+      badge.style.color        = 'var(--muted)';
+      liveDot.style.background = 'var(--muted)';
+      liveText.textContent = 'Initialising...';
+      label.textContent    = 'censerve · Loading models';
+      panel.classList.add('dimmed');
+      ensureVideoFeedStarted();
+
     } else if (phase === 'ready') {
-      badge.style.color  = 'var(--accent)';
+      badge.style.color        = 'var(--accent)';
       liveDot.style.background = 'var(--accent)';
-      liveText.textContent = 'Ready — awaiting enrollment';
-      label.textContent  = 'censerve · Press E to enroll';
+      liveText.textContent = 'Ready — press E to enroll';
+      label.textContent    = 'censerve · Press E to enroll your face';
       panel.classList.add('dimmed');
       document.getElementById('hintEnroll').style.display = 'flex';
 
     } else if (phase === 'collecting') {
-      badge.style.color  = 'var(--amber)';
+      badge.style.color        = 'var(--amber)';
       liveDot.style.background = 'var(--amber)';
       liveText.textContent = 'Enrolling face...';
-      label.textContent  = 'censerve · Scanning your face';
+      label.textContent    = 'censerve · Scanning your face';
       panel.classList.add('dimmed');
       document.getElementById('progressSection').style.display = 'block';
-      // update progress
       const pct = data.enroll_progress || 0;
       document.getElementById('progressFill').style.width = pct + '%';
       document.getElementById('enrollMsg').textContent    = data.enroll_msg || 'Scanning...';
-      document.getElementById('enrollCount').textContent  = `${Math.round(pct * 0.3)} / 30`;
+      document.getElementById('enrollCount').textContent  = pct + '%';
 
     } else if (phase === 'enrolled') {
-      badge.style.color  = 'var(--amber)';
+      badge.style.color        = 'var(--amber)';
       liveDot.style.background = 'var(--amber)';
       liveText.textContent = 'Enrolled — press S to stream';
-      label.textContent  = 'censerve · Press S to start streaming';
+      label.textContent    = 'censerve · Press S to start streaming';
       panel.classList.add('dimmed');
       document.getElementById('hintStream').style.display = 'flex';
 
     } else if (phase === 'streaming') {
-      badge.style.color  = 'var(--danger)';
+      badge.style.color        = 'var(--danger)';
       liveDot.style.background = 'var(--danger)';
       liveText.textContent = 'Live — Virtual Camera Active';
-      label.textContent  = 'censerve Virtual Camera · OBS Output';
+      label.textContent    = 'censerve Virtual Camera · OBS Output';
       panel.classList.remove('dimmed');
       overlay.classList.add('hidden');
     }
   }
 
-  // Keyboard listener — sends E and S to server
-  document.addEventListener('keydown', async (e) => {
+  // ── Keyboard — E and S ─────────────────────────────────────
+  document.addEventListener('keydown', async function(e) {
     const key = e.key.toLowerCase();
     if (key !== 'e' && key !== 's') return;
-    await fetch(`/keypress/${key}`, { method: 'POST' });
+    try { await fetch('/keypress/' + key, { method:'POST' }); } catch(err) {}
   });
 
+  // ── Feature toggles ────────────────────────────────────────
   async function toggleFeature(feature) {
-    const res = await fetch(`/toggle/${feature}`, { method: 'POST' });
-    const data = await res.json();
-    if (!res.ok || data.error) return;
-    featState[feature] = data.enabled;
-    const card = document.getElementById(`card-${feature}`);
-    const cb   = document.getElementById(`toggle-${feature}`);
-    if (cb) cb.checked = data.enabled;
-    if (card) card.classList.toggle('active', !!data.enabled);
+    try {
+      const res  = await fetch('/toggle/' + feature, { method:'POST' });
+      const data = await res.json();
+      if (!res.ok || data.error) return;
+      featState[feature] = data.enabled;
+      const card = document.getElementById('card-' + feature);
+      const cb   = document.getElementById('toggle-' + feature);
+      if (cb)   cb.checked = data.enabled;
+      if (card) card.classList.toggle('active', !!data.enabled);
+    } catch(e) {}
   }
 
-  async function toggleScreenShare() {
+  // ── Screen share ───────────────────────────────────────────
+  function onScreenCardClick(e) {
+    if (e.target.closest('label')) return; // let checkbox handle it
     const cb = document.getElementById('toggle-screen');
-    const card = document.getElementById('card-screen');
-    
+    cb.checked = !cb.checked;
+    onScreenCheckboxChange();
+  }
+
+  function onScreenCheckboxChange() {
+    const cb = document.getElementById('toggle-screen');
     if (cb.checked) {
-      // Show source selection modal
-      await showScreenModal();
+      showScreenModal();
     } else {
-      // Switch back to camera
-      sourceState.mode = 'camera';
-      sourceState.source = null;
-      await setSource('camera');
-      card.classList.remove('active');
+      switchToCamera();
     }
   }
 
-  async function showScreenModal() {
-    const modal = document.getElementById('screenModal');
-    const sourceList = document.getElementById('sourceList');
-    
+  async function switchToCamera() {
+    sourceState.mode   = 'camera';
+    sourceState.source = null;
+    document.getElementById('card-screen').classList.remove('active');
+    document.getElementById('toggle-screen').checked  = false;
+    document.getElementById('screenDesc').textContent = 'Share monitor or window';
+    document.getElementById('videoLabel').textContent = 'censerve Virtual Camera · OBS Output';
     try {
-      const res = await fetch('/screens');
-      const data = await res.json();
-      
+      await fetch('/source', { method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ mode:'camera' }) });
+    } catch(e) {}
+  }
+
+  async function showScreenModal() {
+    const modal      = document.getElementById('screenModal');
+    const sourceList = document.getElementById('sourceList');
+    sourceList.innerHTML =
+      '<div style="font-family:\'DM Mono\',monospace;font-size:11px;color:var(--muted);' +
+      'text-align:center;padding:20px 0;">Loading sources...</div>';
+    modal.classList.add('show');
+
+    try {
+      const data    = await fetch('/screens').then(r => r.json());
+      const screens = data.screens || [];
       sourceList.innerHTML = '';
-      
-      data.screens.forEach(source => {
+
+      if (!screens.length) {
+        sourceList.innerHTML =
+          '<div style="font-family:\'DM Mono\',monospace;font-size:11px;color:var(--muted);' +
+          'text-align:center;padding:20px 0;">No sources found</div>';
+        return;
+      }
+
+      screens.forEach(function(src) {
         const item = document.createElement('div');
         item.className = 'source-item';
-        item.onclick = () => selectScreenSource(source);
-        
-        const icon = source.type === 'monitor' ? '🖥️' : '🪟';
-        
-        item.innerHTML = `
-          <div class="source-icon">${icon}</div>
-          <div class="source-info">
-            <div class="source-name">${source.label}</div>
-            <div class="source-type">${source.type}</div>
-          </div>
-        `;
-        
+        item.innerHTML =
+          '<div class="source-icon">' + (src.type === 'monitor' ? '🖥️' : '🪟') + '</div>' +
+          '<div class="source-info">' +
+            '<div class="source-name">' + src.label + '</div>' +
+            '<div class="source-type">' + src.type + '</div>' +
+          '</div>';
+        item.onclick = function() { selectScreenSource(src); };
         sourceList.appendChild(item);
       });
-      
-      modal.classList.add('show');
-    } catch (e) {
-      console.error('Failed to load screens:', e);
-      // Reset checkbox on error
+    } catch(e) {
+      sourceList.innerHTML =
+        '<div style="font-family:\'DM Mono\',monospace;font-size:11px;color:var(--danger);' +
+        'text-align:center;padding:20px 0;">Could not load sources</div>';
       document.getElementById('toggle-screen').checked = false;
     }
   }
 
-  function closeScreenModal() {
-    const modal = document.getElementById('screenModal');
-    modal.classList.remove('show');
-    // Reset checkbox
-    document.getElementById('toggle-screen').checked = false;
-  }
-
-  async function selectScreenSource(source) {
-    sourceState.mode = 'screen';
-    sourceState.source = source;
-    
+  async function selectScreenSource(src) {
+    sourceState.mode   = 'screen';
+    sourceState.source = src;
+    closeScreenModal();
+    document.getElementById('card-screen').classList.add('active');
+    document.getElementById('toggle-screen').checked  = true;
+    document.getElementById('screenDesc').textContent = 'Sharing: ' + src.label;
+    document.getElementById('videoLabel').textContent = 'censerve · Sharing: ' + src.label;
     try {
-      await setSource('screen', source);
-      const card = document.getElementById('card-screen');
-      card.classList.add('active');
-      closeScreenModal();
-      
-      // Update video label
-      const label = document.getElementById('videoLabel');
-      if (sourceState.mode === 'screen') {
-        label.textContent = `censerve · Sharing: ${source.label}`;
-      }
-    } catch (e) {
-      console.error('Failed to set screen source:', e);
-      closeScreenModal();
+      await fetch('/source', { method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ mode:'screen', source:src }) });
+    } catch(e) {}
+  }
+
+  function closeScreenModal() {
+    document.getElementById('screenModal').classList.remove('show');
+    if (sourceState.mode !== 'screen') {
+      document.getElementById('toggle-screen').checked = false;
     }
   }
 
-  async function setSource(mode, source = null) {
-    const body = { mode };
-    if (mode === 'screen' && source) {
-      body.source = source;
-    }
-    
-    const res = await fetch('/source', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    
-    if (!res.ok) {
-      throw new Error('Failed to set source');
-    }
-    
-    const data = await res.json();
-    return data;
-  }
-
-  // Update video label when phase changes to reflect source mode
-  const originalApplyPhase = applyPhase;
-  applyPhase = function(data) {
-    originalApplyPhase(data);
-    
-    if (data.phase === 'streaming') {
-      const label = document.getElementById('videoLabel');
-      if (sourceState.mode === 'screen' && sourceState.source) {
-        label.textContent = `censerve · Sharing: ${sourceState.source.label}`;
-      } else {
-        label.textContent = 'censerve Virtual Camera · OBS Output';
-      }
-    }
-  };
+  document.getElementById('screenModal').addEventListener('click', function(e) {
+    if (e.target === this) closeScreenModal();
+  });
 </script>
 </body>
 </html>
