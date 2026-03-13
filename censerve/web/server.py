@@ -1,6 +1,6 @@
 """
 censerve Web Server
-Phases: ready → collecting (E) → enrolled → streaming (S)
+Phases: pre_stream → streaming
 Run:    python censerve/web/server.py
 Open:   http://localhost:5000
 """
@@ -15,46 +15,54 @@ from flask import Flask, Response, jsonify, send_from_directory, request
 app    = Flask(__name__)
 STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
 ENROLLED_DIR  = os.path.join(ROOT, 'enrolled_faces')
-ENROLLED_FILE = os.path.join(ENROLLED_DIR, 'owner.pkl')
+ENROLLED_FILE = os.path.join(ENROLLED_DIR, 'faces.pkl')
 os.makedirs(ENROLLED_DIR, exist_ok=True)
 
-# Screen capture import
 from censerve.video.screen_capture import ScreenCapture, list_sources as _list_screen_sources
 
-# ── Shared state ───────────────────────────────────────────────────────────────
+# ── Constants ─────────────────────────────────────────────────────────────
+MAX_ENROLLED  = 5
+ENROLL_FRAMES = 30
+
+# ── Shared state ──────────────────────────────────────────────────────────
 _lock    = threading.Lock()
 _jpeg    = None
 _running = False
 
-# phases: idle | ready | collecting | enrolled | streaming
+_blur_strength = 55  # must always be odd — OpenCV GaussianBlur kernel size
+
 _state = {
-    'phase':           'idle',
-    'enroll_progress': 0,   # 0-100
-    'enroll_msg':      '',
+    'phase': 'idle',
 }
 
 _settings = {
-    'faces':  True,
-    'plates': True,
-    'cards':  True,
-    'nsfw':   True,
+    'faces':    True,
+    'plates':   True,
+    'cards':    True,
+    'nsfw':     True,
+    'text_pii': True,
 }
-
-# Events set by keypress route to unblock waiting threads
-_evt_start_collect = threading.Event()
-_evt_start_stream  = threading.Event()
 
 _cap          = None
 _face_app     = None
-_owner_embeds = []
+_enrolled_faces = {}  # name → [embedding, ...]
 
-# Screen capture globals
-_source_mode    = 'camera'    # 'camera' or 'screen'
-_screen_capture = None        # initialised in _start_thread
+_source_mode    = 'camera'
+_screen_capture = None
 
-ENROLL_FRAMES = 30
+_evt_begin_stream = threading.Event()
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
+_enroll_state = {
+    'active':    False,
+    'name':      '',
+    'collected': [],
+    'progress':  0,
+    'msg':       '',
+    'done':      False,
+}
+_enroll_lock = threading.Lock()
+
+# ── Helpers ───────────────────────────────────────────────────────────────
 
 def _blur_region(frame, x1, y1, x2, y2, strength=55):
     h, w = frame.shape[:2]
@@ -69,15 +77,65 @@ def _cosine(a, b):
     return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-6))
 
 def _is_owner(embed):
-    if not _owner_embeds:
-        return False
-    return max(_cosine(embed, e) for e in _owner_embeds) > 0.38
+    for embeds in _enrolled_faces.values():
+        for e in embeds:
+            if _cosine(embed, e) > 0.38:
+                return True
+    return False
 
 def _encode_jpeg(frame):
     _, buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 82])
     return buf.tobytes()
 
-# ── Init ───────────────────────────────────────────────────────────────────────
+# ── Enrolled faces persistence ────────────────────────────────────────────
+
+def _save_enrolled_faces():
+    with open(ENROLLED_FILE, 'wb') as f:
+        pickle.dump(_enrolled_faces, f)
+
+def _load_enrolled_faces():
+    global _enrolled_faces
+    if os.path.exists(ENROLLED_FILE):
+        with open(ENROLLED_FILE, 'rb') as f:
+            _enrolled_faces = pickle.load(f)
+    else:
+        _enrolled_faces = {}
+
+# ── Enrollment frame collector ────────────────────────────────────────────
+
+def _collect_enrollment_frame(frame):
+    with _enroll_lock:
+        if not _enroll_state['active']:
+            return
+        name = _enroll_state['name']
+
+    small = cv2.resize(frame, (640, 360))
+    faces = None
+    if _face_app:
+        try:
+            faces = _face_app.get(small)
+        except Exception:
+            pass
+
+    with _enroll_lock:
+        if not _enroll_state['active']:
+            return
+        if not faces:
+            _enroll_state['msg'] = 'No face \u2014 move closer'
+            return
+        f = max(faces, key=lambda x: (x.bbox[2]-x.bbox[0])*(x.bbox[3]-x.bbox[1]))
+        _enroll_state['collected'].append(f.normed_embedding.copy())
+        count = len(_enroll_state['collected'])
+        _enroll_state['progress'] = int(count / ENROLL_FRAMES * 100)
+        _enroll_state['msg'] = f'{count} / {ENROLL_FRAMES}'
+        if count >= ENROLL_FRAMES:
+            _enrolled_faces[name] = list(_enroll_state['collected'])
+            _enroll_state['active'] = False
+            _enroll_state['done'] = True
+            _enroll_state['msg'] = f'{name} enrolled'
+            _save_enrolled_faces()
+
+# ── Init ──────────────────────────────────────────────────────────────────
 
 def _init_camera():
     global _cap
@@ -97,109 +155,39 @@ def _init_face_app():
     except Exception as e:
         print(f'[censerve] insightface unavailable: {e}')
 
-# ── Phase 1: ready — show live preview, wait for E ────────────────────────────
+# ── Pre-stream phase ─────────────────────────────────────────────────────
 
-def _ready_phase():
-    with _lock:
-        _state['phase'] = 'ready'
+def _pre_stream_thread():
+    global _jpeg
 
-    # Produce first frame so /video_feed has something to send as soon as client connects
-    ok, frame = _cap.read()
-    if ok:
-        with _lock:
-            _jpeg = _encode_jpeg(frame)
+    _evt_begin_stream.clear()
+    print('[censerve] Pre-stream \u2014 enroll faces, then click Start Stream')
 
-    print('[censerve] Ready — waiting for E to start enrollment')
-    _evt_start_collect.clear()
-
-    while not _evt_start_collect.wait(timeout=0.05):
-        ok, frame = _cap.read()
-        if not ok:
-            continue
-        with _lock:
-            _jpeg = _encode_jpeg(frame)
-
-    _collect_phase()
-
-# ── Phase 2: collecting embeddings ────────────────────────────────────────────
-
-def _collect_phase():
-    global _owner_embeds
-
-    with _lock:
-        _state['phase']           = 'collecting'
-        _state['enroll_progress'] = 0
-        _state['enroll_msg']      = 'Look at the camera'
-
-    # Always fresh
-    if os.path.exists(ENROLLED_FILE):
-        os.remove(ENROLLED_FILE)
-    _owner_embeds = []
-
-    collected  = []
-    enroll_tick = 0
-    print(f'[Enroll] Collecting {ENROLL_FRAMES} embeddings...')
-
-    while len(collected) < ENROLL_FRAMES:
+    while _running and not _evt_begin_stream.is_set():
         ok, frame = _cap.read()
         if not ok:
             time.sleep(0.01)
             continue
 
-        display = frame.copy()
-        embed   = None
+        output = frame.copy()
 
-        # Run detection every other frame for speed
-        if _face_app and enroll_tick % 2 == 0:
+        if _face_app:
             try:
-                small  = cv2.resize(frame, (640, 360))
-                faces  = _face_app.get(small)
-                if faces:
-                    sx = frame.shape[1] / 640
-                    sy = frame.shape[0] / 360
-                    f  = max(faces, key=lambda x: (x.bbox[2]-x.bbox[0])*(x.bbox[3]-x.bbox[1]))
-                    embed = f.normed_embedding
-                    collected.append(embed.copy())
-                    x1 = int(f.bbox[0]*sx); y1 = int(f.bbox[1]*sy)
-                    x2 = int(f.bbox[2]*sx); y2 = int(f.bbox[3]*sy)
-                    cv2.rectangle(display, (x1, y1), (x2, y2), (0, 229, 160), 2)
+                for f in _face_app.get(frame):
+                    if not _is_owner(f.normed_embedding):
+                        x1, y1, x2, y2 = [int(v) for v in f.bbox]
+                        _blur_region(output, x1-20, y1-20, x2+20, y2+20, _blur_strength)
             except Exception:
                 pass
-        enroll_tick += 1
 
-        pct = int(len(collected) / ENROLL_FRAMES * 100)
-        msg = 'No face detected — move closer' if embed is None else f'{len(collected)}/{ENROLL_FRAMES}'
+        _collect_enrollment_frame(frame)
 
         with _lock:
-            _state['enroll_progress'] = pct
-            _state['enroll_msg']      = msg
-            _jpeg = _encode_jpeg(display)
+            _jpeg = _encode_jpeg(output)
 
-    # Save
-    with open(ENROLLED_FILE, 'wb') as f:
-        pickle.dump(collected, f)
-    _owner_embeds = collected
-    print(f'[Enroll] Done — {len(collected)} embeddings saved')
+        time.sleep(0.01)
 
-    with _lock:
-        _state['phase']           = 'enrolled'
-        _state['enroll_progress'] = 100
-        _state['enroll_msg']      = 'Enrolled!'
-
-    print('[censerve] Enrolled — waiting for S to start stream')
-    _evt_start_stream.clear()
-
-    # Keep showing live preview while waiting for S
-    while not _evt_start_stream.wait(timeout=0.05):
-        ok, frame = _cap.read()
-        if not ok:
-            continue
-        with _lock:
-            _jpeg = _encode_jpeg(frame)
-
-    _streaming_thread()
-
-# ── Phase 3: streaming ─────────────────────────────────────────────────────────
+# ── Streaming ─────────────────────────────────────────────────────────────
 
 def _streaming_thread():
     global _jpeg, _running
@@ -231,6 +219,14 @@ def _streaming_thread():
     except Exception as e:
         print(f'[censerve] NSFW detector skipped: {e}')
 
+    text_det = None
+    try:
+        from censerve.video.text_pii_detector import make_text_pii_detector
+        text_det = make_text_pii_detector(backend='easy')
+        print('[censerve] Text PII detector loaded')
+    except Exception as e:
+        print(f'[censerve] Text PII detector skipped: {e}')
+
     mp_face = None
     if not _face_app:
         try:
@@ -243,10 +239,10 @@ def _streaming_thread():
     frame_id    = 0
     cached_objs = []
     cached_nsfw = []
+    cached_text = []
     print('[censerve] Streaming...')
 
     while _running:
-        # ── Read frame from active source ──
         if _source_mode == 'screen' and _screen_capture:
             ok, frame = _screen_capture.read()
         else:
@@ -268,7 +264,7 @@ def _streaming_thread():
                     for f in _face_app.get(frame):
                         if not _is_owner(f.normed_embedding):
                             x1,y1,x2,y2 = [int(v) for v in f.bbox]
-                            _blur_region(output, x1-20, y1-20, x2+20, y2+20, 71)
+                            _blur_region(output, x1-20, y1-20, x2+20, y2+20, _blur_strength)
                 except Exception:
                     pass
             elif mp_face:
@@ -282,9 +278,12 @@ def _streaming_thread():
                             _blur_region(output,
                                 int(bb.xmin*iw)-20, int(bb.ymin*ih)-20,
                                 int((bb.xmin+bb.width)*iw)+20,
-                                int((bb.ymin+bb.height)*ih)+20, 71)
+                                int((bb.ymin+bb.height)*ih)+20, _blur_strength)
                 except Exception:
                     pass
+
+        # Enrollment during streaming
+        _collect_enrollment_frame(frame)
 
         # Plate/card YOLO — camera only
         if _source_mode == 'camera' and frame_id % 10 == 0 and obj_det:
@@ -299,6 +298,14 @@ def _streaming_thread():
             except Exception:
                 cached_nsfw = []
 
+        # Text PII: every 4 frames (camera) or every 2 frames (screen)
+        text_cadence = 4 if _source_mode == 'camera' else 2
+        if frame_id % text_cadence == 0 and text_det:
+            try:
+                cached_text = text_det(frame, frame_id)
+            except Exception:
+                cached_text = []
+
         for ev in cached_objs:
             if ev.type == 'plate' and s['plates']:
                 _blur_region(output, *ev.bbox)
@@ -308,6 +315,10 @@ def _streaming_thread():
         if s['nsfw']:
             for ev in cached_nsfw:
                 _blur_region(output, *ev.bbox)
+
+        if s.get('text_pii'):
+            for ev in cached_text:
+                _blur_region(output, *ev.bbox, _blur_strength)
 
         with _lock:
             _jpeg = _encode_jpeg(output)
@@ -328,18 +339,16 @@ def _streaming_thread():
         _state['phase'] = 'idle'
     print('[censerve] Stopped.')
 
-# ── Entry ──────────────────────────────────────────────────────────────────────
+# ── Entry ─────────────────────────────────────────────────────────────────
 
 def _start_thread():
-    global _running, _screen_capture
+    global _running, _screen_capture, _jpeg
     _running = True
     if not _init_camera():
         print('[censerve] ERROR: cannot open webcam')
         _running = False
         return
-    # Initialize screen capture
     _screen_capture = ScreenCapture()
-    # Show first frame immediately so /video_feed has something while face app loads
     with _lock:
         _state['phase'] = 'starting'
     ok, frame = _cap.read()
@@ -347,9 +356,13 @@ def _start_thread():
         with _lock:
             _jpeg = _encode_jpeg(frame)
     _init_face_app()
-    _ready_phase()
+    _load_enrolled_faces()
+    with _lock:
+        _state['phase'] = 'pre_stream'
+    _pre_stream_thread()
+    _streaming_thread()
 
-# ── Routes ─────────────────────────────────────────────────────────────────────
+# ── Routes ────────────────────────────────────────────────────────────────
 
 @app.route('/')
 def index():
@@ -367,18 +380,16 @@ def start():
         threading.Thread(target=_start_thread, daemon=True).start()
     return jsonify({'ok': True})
 
-@app.route('/keypress/<key>', methods=['POST'])
-def keypress(key):
-    k = key.lower()
-    with _lock:
-        phase = _state['phase']
-    if k == 'e' and phase == 'ready':
-        _evt_start_collect.set()
-        return jsonify({'ok': True, 'action': 'start_collect'})
-    if k == 's' and phase == 'enrolled':
-        _evt_start_stream.set()
-        return jsonify({'ok': True, 'action': 'start_stream'})
-    return jsonify({'ok': False, 'reason': f'key {k} not valid in phase {phase}'})
+@app.route('/blur_strength', methods=['POST'])
+def set_blur_strength():
+    global _blur_strength
+    data = request.get_json() or {}
+    val = int(data.get('value', _blur_strength))
+    val = max(11, min(99, val))
+    if val % 2 == 0:
+        val += 1
+    _blur_strength = val
+    return jsonify({'blur_strength': _blur_strength})
 
 @app.route('/toggle/<feature>', methods=['POST'])
 def toggle(feature):
@@ -393,11 +404,9 @@ def toggle(feature):
 def get_status():
     with _lock:
         return jsonify({
-            'running':          _running,
-            'phase':            _state['phase'],
-            'enroll_progress':  _state['enroll_progress'],
-            'enroll_msg':       _state['enroll_msg'],
-            'settings':         dict(_settings),
+            'running':  _running,
+            'phase':    _state['phase'],
+            'settings': dict(_settings),
         })
 
 @app.route('/stop', methods=['POST'])
@@ -408,7 +417,6 @@ def stop():
 
 @app.route('/screens', methods=['GET'])
 def get_screens():
-    """Returns list of capturable monitors and windows."""
     try:
         screens = _list_screen_sources()
     except Exception as e:
@@ -418,14 +426,9 @@ def get_screens():
 
 @app.route('/source', methods=['POST'])
 def set_source():
-    """
-    Switch between camera and screen capture.
-    Body: { mode: 'camera' } or { mode: 'screen', source: { ...source dict... } }
-    """
     global _source_mode
     data = request.get_json() or {}
     mode = data.get('mode', 'camera')
-
     if mode == 'screen':
         source = data.get('source')
         if not source:
@@ -433,12 +436,68 @@ def set_source():
         if _screen_capture:
             _screen_capture.set_source(source)
         _source_mode = 'screen'
-        print(f'[censerve] Source → screen: {source.get("label")}')
+        print(f'[censerve] Source \u2192 screen: {source.get("label")}')
     else:
         _source_mode = 'camera'
-        print('[censerve] Source → camera')
-
+        print('[censerve] Source \u2192 camera')
     return jsonify({'ok': True, 'mode': _source_mode})
+
+# ── Face enrollment routes ────────────────────────────────────────────────
+
+@app.route('/faces', methods=['GET'])
+def get_faces():
+    return jsonify({'faces': list(_enrolled_faces.keys())})
+
+@app.route('/faces/<name>', methods=['DELETE'])
+def delete_face(name):
+    if name in _enrolled_faces:
+        del _enrolled_faces[name]
+        _save_enrolled_faces()
+    return jsonify({'ok': True})
+
+@app.route('/enroll/start', methods=['POST'])
+def enroll_start():
+    data = request.get_json() or {}
+    name = data.get('name', '').strip()
+    if not name:
+        return jsonify({'error': 'name is required'}), 400
+    if len(_enrolled_faces) >= MAX_ENROLLED and name not in _enrolled_faces:
+        return jsonify({'error': 'Maximum 5 faces allowed'}), 400
+    with _enroll_lock:
+        _enroll_state['active']    = True
+        _enroll_state['name']      = name
+        _enroll_state['collected'] = []
+        _enroll_state['progress']  = 0
+        _enroll_state['msg']       = 'Look at the camera'
+        _enroll_state['done']      = False
+    return jsonify({'ok': True})
+
+@app.route('/enroll/status', methods=['GET'])
+def enroll_status():
+    with _enroll_lock:
+        return jsonify({
+            'active':   _enroll_state['active'],
+            'name':     _enroll_state['name'],
+            'progress': _enroll_state['progress'],
+            'msg':      _enroll_state['msg'],
+            'done':     _enroll_state['done'],
+        })
+
+@app.route('/enroll/cancel', methods=['POST'])
+def enroll_cancel():
+    with _enroll_lock:
+        _enroll_state['active'] = False
+        _enroll_state['msg']    = 'Cancelled'
+    return jsonify({'ok': True})
+
+@app.route('/stream/start', methods=['POST'])
+def stream_start():
+    with _lock:
+        phase = _state['phase']
+    if phase != 'pre_stream':
+        return jsonify({'error': f'Cannot start stream in phase: {phase}'}), 400
+    _evt_begin_stream.set()
+    return jsonify({'ok': True})
 
 def _gen():
     while True:
@@ -457,5 +516,5 @@ def video_feed():
     return r
 
 if __name__ == '__main__':
-    print('censerve → http://localhost:5000')
+    print('censerve \u2192 http://localhost:5000')
     app.run(host='0.0.0.0', port=5000, threaded=True)

@@ -5,3 +5,4 @@ insightface
 onnxruntime
 mss
 pywin32
+easyocr
