@@ -188,6 +188,7 @@ class TextPIIWorker:
         self._pending_frame = None
         self._pending_fid = 0
         self._events: List[DetectionEvent] = []
+        self._last_result_fid: int = -1
         self._stop = False
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
@@ -202,6 +203,11 @@ class TextPIIWorker:
     def latest_events(self) -> List[DetectionEvent]:
         with self._lock:
             return list(self._events)
+
+    @property
+    def last_result_fid(self) -> int:
+        with self._lock:
+            return self._last_result_fid
 
     def stop(self):
         self._stop = True
@@ -221,6 +227,7 @@ class TextPIIWorker:
                 results = self._detector.detect(frame, fid)
                 with self._lock:
                     self._events = results
+                    self._last_result_fid = fid
             except Exception as e:
                 print(f'[TextPII Worker] error: {e}')
 

@@ -4,6 +4,23 @@ from typing import Tuple, Literal
 
 # Set to 0 for real-time testing (no intentional AV delay)
 AV_DELAY_SECONDS = 0.0
+
+# How often each detector receives a new frame (every N frames).
+# Lower = more responsive but heavier on CPU.
+DETECTION_CADENCE = {
+    'face':             3,
+    'objects_camera':  10,
+    'objects_screen':  15,
+    'nsfw':            15,
+    'text_pii_camera': 20,
+    'text_pii_screen':  8,
+}
+
+# Cached detection results older than this many frames are discarded.
+# At 30 fps, 45 frames ≈ 1.5 seconds — enough to avoid stale blur
+# sticking to a region after content moves.
+CACHE_TTL_FRAMES = 45
+
 @dataclass
 class DetectionEvent:
     type: Literal["face", "plate", "card", "nsfw", "text_pii"]

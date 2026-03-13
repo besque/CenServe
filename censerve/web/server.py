@@ -11,6 +11,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 sys.path.insert(0, ROOT)
 
 from flask import Flask, Response, jsonify, send_from_directory, request
+from shared_types import DETECTION_CADENCE, CACHE_TTL_FRAMES
 
 app    = Flask(__name__)
 STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
@@ -62,6 +63,61 @@ _enroll_state = {
     'done':      False,
 }
 _enroll_lock = threading.Lock()
+
+# ── Background worker ─────────────────────────────────────────────────────
+
+class _BackgroundWorker:
+    """
+    Generic async wrapper: runs a detect(frame, frame_id)->List[DetectionEvent]
+    callable on a daemon thread so the main loop never blocks.
+    """
+
+    def __init__(self, detect_fn, name: str = 'detector'):
+        self._detect = detect_fn
+        self._name = name
+        self._lock = threading.Lock()
+        self._pending_frame = None
+        self._pending_fid = 0
+        self._events = []
+        self._last_fid = -1
+        self._stop = False
+        self._thread = threading.Thread(target=self._loop, daemon=True)
+        self._thread.start()
+
+    def submit_frame(self, frame, frame_id: int):
+        with self._lock:
+            self._pending_frame = frame.copy()
+            self._pending_fid = frame_id
+
+    @property
+    def latest(self):
+        """Returns (events, frame_id_of_those_events)."""
+        with self._lock:
+            return list(self._events), self._last_fid
+
+    def stop(self):
+        self._stop = True
+
+    def _loop(self):
+        while not self._stop:
+            with self._lock:
+                frame = self._pending_frame
+                fid = self._pending_fid
+                self._pending_frame = None
+
+            if frame is None:
+                time.sleep(0.05)
+                continue
+
+            try:
+                results = self._detect(frame, fid)
+                with self._lock:
+                    self._events = results
+                    self._last_fid = fid
+            except Exception as e:
+                print(f'[{self._name}] bg-worker error: {e}')
+
+            time.sleep(0.02)
 
 # ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -196,6 +252,7 @@ def _streaming_thread():
     with _lock:
         _state['phase'] = 'streaming'
 
+    # ── Virtual camera ────────────────────────────────────────────────────
     vcam = None
     try:
         import pyvirtualcam
@@ -204,24 +261,30 @@ def _streaming_thread():
     except Exception as e:
         print(f'[censerve] Virtual camera skipped: {e}')
 
-    obj_det = None
+    # ── Object detector (plates + cards) — async background worker ────────
+    obj_worker = None
     try:
         from censerve.video.object_detector import PlateCardDetector
-        obj_det = PlateCardDetector()
-        print('[censerve] Object detector loaded')
+        _obj = PlateCardDetector()
+        obj_worker = _BackgroundWorker(_obj.detect, name='ObjDet')
+        print('[censerve] Object detector loaded (async)')
     except Exception as e:
         print(f'[censerve] Object detector skipped: {e}')
 
-    nsfw_detect = None
+    # ── NSFW detector — async background worker ──────────────────────────
+    nsfw_worker = None
     try:
-        from censerve.video.nsfw_detector import make_nsfw_detector
-        nsfw_detect = make_nsfw_detector()
-        print('[censerve] NSFW detector loaded')
+        from censerve.video.nsfw_detector import NSFWDetector
+        _nsfw = NSFWDetector()
+        nsfw_worker = _BackgroundWorker(_nsfw.detect, name='NSFW')
+        print('[censerve] NSFW detector loaded (async)')
     except Exception as e:
         print(f'[censerve] NSFW detector skipped: {e}')
 
+    # ── Text PII — uses its own TextPIIWorker ────────────────────────────
     text_pii_worker = None
 
+    # ── Mediapipe fallback for faces ─────────────────────────────────────
     mp_face = None
     if not _face_app:
         try:
@@ -231,10 +294,7 @@ def _streaming_thread():
         except Exception:
             pass
 
-    frame_id    = 0
-    cached_objs = []
-    cached_nsfw = []
-    cached_text = []
+    frame_id = 0
     print('[censerve] Streaming...')
 
     while _running:
@@ -250,15 +310,16 @@ def _streaming_thread():
         with _lock:
             s = dict(_settings)
 
+        is_screen = (_source_mode == 'screen')
         output = frame.copy()
 
-        # Face detection — camera mode only
-        if _source_mode == 'camera' and s['faces']:
+        # ── Face blur (camera only) ──────────────────────────────────────
+        if not is_screen and s['faces']:
             if _face_app:
                 try:
                     for f in _face_app.get(frame):
                         if not _is_owner(f.normed_embedding):
-                            x1,y1,x2,y2 = [int(v) for v in f.bbox]
+                            x1, y1, x2, y2 = [int(v) for v in f.bbox]
                             _blur_region(output, x1-20, y1-20, x2+20, y2+20, _blur_strength)
                 except Exception:
                     pass
@@ -277,60 +338,72 @@ def _streaming_thread():
                 except Exception:
                     pass
 
-        # Enrollment during streaming
         _collect_enrollment_frame(frame)
 
-        # Plate/card YOLO — camera only
-        if _source_mode == 'camera' and frame_id % 10 == 0 and obj_det:
-            try:
-                cached_objs = obj_det.detect(frame, frame_id)
-            except Exception:
-                cached_objs = []
+        # ── Submit frames to async workers at their cadence ──────────────
+        obj_cadence = DETECTION_CADENCE['objects_screen' if is_screen else 'objects_camera']
+        if obj_worker and frame_id % obj_cadence == 0:
+            obj_worker.submit_frame(frame, frame_id)
 
-        if frame_id % 15 == 0 and nsfw_detect:
-            try:
-                cached_nsfw = nsfw_detect(frame, frame_id)
-            except Exception:
-                cached_nsfw = []
+        nsfw_cadence = DETECTION_CADENCE['nsfw']
+        if nsfw_worker and frame_id % nsfw_cadence == 0:
+            nsfw_worker.submit_frame(frame, frame_id)
 
-        # Text PII: async background worker — only in screen-share mode
-        if s.get('text_pii') and _source_mode == 'screen':
+        text_cadence = DETECTION_CADENCE['text_pii_screen' if is_screen else 'text_pii_camera']
+        if s.get('text_pii'):
             if text_pii_worker is None:
                 try:
                     from censerve.video.text_pii_detector import TextPIIWorker
-                    mode = 'screen' if _source_mode == 'screen' else 'camera'
+                    mode = 'screen' if is_screen else 'camera'
                     text_pii_worker = TextPIIWorker(backend='easy', mode=mode)
                     print(f'[censerve] Text PII worker started (mode={mode})')
                 except Exception as e:
                     print(f'[censerve] Text PII worker skipped: {e}')
-
-            text_cadence = 20 if _source_mode == 'camera' else 8
             if text_pii_worker and frame_id % text_cadence == 0:
                 text_pii_worker.submit_frame(frame, frame_id)
 
-            if text_pii_worker:
-                cached_text = text_pii_worker.latest_events
+        # ── Read cached results + TTL expiry ─────────────────────────────
+        cached_objs = []
+        if obj_worker:
+            evts, fid = obj_worker.latest
+            if evts and (frame_id - fid) <= CACHE_TTL_FRAMES:
+                cached_objs = evts
 
+        cached_nsfw = []
+        if nsfw_worker:
+            evts, fid = nsfw_worker.latest
+            if evts and (frame_id - fid) <= CACHE_TTL_FRAMES:
+                cached_nsfw = evts
+
+        cached_text = []
+        if text_pii_worker and s.get('text_pii'):
+            evts = text_pii_worker.latest_events
+            fid = text_pii_worker.last_result_fid
+            if evts and fid >= 0 and (frame_id - fid) <= CACHE_TTL_FRAMES:
+                cached_text = evts
+
+        # ── Apply blur from all detectors ────────────────────────────────
         for ev in cached_objs:
             if ev.type == 'plate' and s['plates']:
-                _blur_region(output, *ev.bbox)
+                _blur_region(output, *ev.bbox, _blur_strength)
             elif ev.type == 'card' and s['cards']:
-                _blur_region(output, *ev.bbox)
+                _blur_region(output, *ev.bbox, _blur_strength)
 
         if s['nsfw']:
             for ev in cached_nsfw:
-                _blur_region(output, *ev.bbox)
+                _blur_region(output, *ev.bbox, _blur_strength)
 
         if s.get('text_pii'):
             for ev in cached_text:
                 _blur_region(output, *ev.bbox, _blur_strength)
 
+        # ── Output ───────────────────────────────────────────────────────
         with _lock:
             _jpeg = _encode_jpeg(output)
 
         if vcam:
             try:
-                rgb_out = cv2.cvtColor(cv2.resize(output, (1280,720)), cv2.COLOR_BGR2RGB)
+                rgb_out = cv2.cvtColor(cv2.resize(output, (1280, 720)), cv2.COLOR_BGR2RGB)
                 vcam.send(rgb_out)
                 vcam.sleep_until_next_frame()
             except Exception:
@@ -338,6 +411,11 @@ def _streaming_thread():
 
         frame_id += 1
 
+    # ── Cleanup ──────────────────────────────────────────────────────────
+    if obj_worker:
+        obj_worker.stop()
+    if nsfw_worker:
+        nsfw_worker.stop()
     if text_pii_worker:
         text_pii_worker.stop()
     if vcam:

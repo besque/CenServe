@@ -443,8 +443,7 @@
         </label>
       </div>
 
-      <!-- Text PII — hidden until P1 adds it to settings -->
-      <div class="toggle-card active" id="card-text_pii" onclick="toggleFeature('text_pii')" style="display:none;">
+      <div class="toggle-card active" id="card-text_pii" onclick="toggleFeature('text_pii')">
         <div class="toggle-left">
           <div class="toggle-icon">🔤</div>
           <div class="toggle-info">
@@ -533,8 +532,8 @@
     </div>
     <div class="source-list" id="sourceList"></div>
     <div class="modal-note">
-      ℹ In screen mode: face blur and plate/card detection are disabled.<br>
-      NSFW and Text PII remain active.
+      ℹ In screen mode: face blur is disabled (no faces in screen captures).<br>
+      NSFW, Text PII, and card/plate detection remain active.
     </div>
   </div>
 </div>
@@ -584,10 +583,6 @@ function applySettingsToUI(s) {
   ['faces','plates','cards','nsfw','text_pii'].forEach(function(f) {
     if (s[f] === undefined) return;
     featState[f] = s[f];
-    if (f === 'text_pii') {
-      const c = document.getElementById('card-text_pii');
-      if (c) c.style.display = 'flex';
-    }
     const card = document.getElementById('card-'+f);
     const cb   = document.getElementById('toggle-'+f);
     if (card) card.classList.toggle('active', !!s[f]);
