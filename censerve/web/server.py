@@ -278,8 +278,12 @@ def _streaming_thread():
         _nsfw = NSFWDetector()
         nsfw_worker = _BackgroundWorker(_nsfw.detect, name='NSFW')
         print('[censerve] NSFW detector loaded (async)')
+    except ImportError as e:
+        print(f'[censerve] NSFW detector import failed: {e}')
     except Exception as e:
-        print(f'[censerve] NSFW detector skipped: {e}')
+        print(f'[censerve] NSFW detector initialization failed: {e}')
+        import traceback
+        traceback.print_exc()
 
     # ── Text PII — uses its own TextPIIWorker ────────────────────────────
     text_pii_worker = None

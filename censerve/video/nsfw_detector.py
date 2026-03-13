@@ -5,19 +5,39 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from shared_types import DetectionEvent
 
-# NudeNet labels to blur — adjust based on your use case
+# NudeNet labels to blur — comprehensive list for debugging
 LABELS_TO_BLUR = [
+    # Primary explicit content
     "EXPOSED_BREAST_F",
-    "EXPOSED_GENITALIA_F",
+    "EXPOSED_GENITALIA_F", 
     "EXPOSED_GENITALIA_M",
     "EXPOSED_ANUS_F",
     "EXPOSED_ANUS_M",
     "EXPOSED_BUTTOCKS",
-    # Add "FACE_F", "FACE_M" if you want faces blurred via NudeNet too (skip, MediaPipe handles faces)
+    
+    # Common NudeNet labels (enable all for debugging)
+    "BELLY",
+    "FEET_F",
+    "FEET_M", 
+    "ARMPITS_F",
+    "ARMPITS_M",
+    "FACE_F",
+    "FACE_M",
+    "COVERED_GENITALIA_F",
+    "COVERED_GENITALIA_M",
+    "COVERED_BREAST_F",
+    "COVERED_BUTTOCKS",
+    
+    # Other possible labels
+    "FEMALE_BREAST_EXPOSED",
+    "MALE_GENITALIA_EXPOSED", 
+    "FEMALE_GENITALIA_EXPOSED",
+    "BUTTOCKS_EXPOSED",
+    "ANUS_EXPOSED",
 ]
 
 class NSFWDetector:
-    def __init__(self, confidence_threshold: float = 0.4):
+    def __init__(self, confidence_threshold: float = 0.1):  # Very low for debugging
         self.conf = confidence_threshold
         # NudeNet downloads model automatically on first use (~15MB)
         self.detector = NudeDetector()
@@ -25,8 +45,13 @@ class NSFWDetector:
 
     def detect(self, frame: np.ndarray, frame_id: int) -> List[DetectionEvent]:
         """Returns DetectionEvents for NSFW regions."""
-        # NudeNet expects a file path or numpy array
-        detections = self.detector.detect(frame)
+        try:
+            # NudeNet expects a file path or numpy array
+            detections = self.detector.detect(frame)
+            
+        except Exception as e:
+            print(f"[NSFW] ERROR during detection: {e}")
+            return []
         
         events = []
         for det in detections:
