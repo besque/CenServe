@@ -220,12 +220,6 @@ def _streaming_thread():
         print(f'[censerve] NSFW detector skipped: {e}')
 
     text_det = None
-    try:
-        from censerve.video.text_pii_detector import make_text_pii_detector
-        text_det = make_text_pii_detector(backend='easy')
-        print('[censerve] Text PII detector loaded')
-    except Exception as e:
-        print(f'[censerve] Text PII detector skipped: {e}')
 
     mp_face = None
     if not _face_app:
@@ -298,13 +292,25 @@ def _streaming_thread():
             except Exception:
                 cached_nsfw = []
 
-        # Text PII: every 4 frames (camera) or every 2 frames (screen)
-        text_cadence = 4 if _source_mode == 'camera' else 2
-        if frame_id % text_cadence == 0 and text_det:
-            try:
-                cached_text = text_det(frame, frame_id)
-            except Exception:
-                cached_text = []
+        # Text PII: only when enabled. Run relatively infrequently to avoid lag.
+        if s.get('text_pii'):
+            # Lazy-load detector the first time it's actually needed
+            if text_det is None:
+                try:
+                    from censerve.video.text_pii_detector import make_text_pii_detector
+                    text_det = make_text_pii_detector(backend='easy')
+                    print('[censerve] Text PII detector loaded')
+                except Exception as e:
+                    print(f'[censerve] Text PII detector skipped: {e}')
+                    text_det = None
+
+            # Every 20 frames in camera mode (~1–2 fps), every 10 in screen mode
+            text_cadence = 20 if _source_mode == 'camera' else 10
+            if text_det and frame_id % text_cadence == 0:
+                try:
+                    cached_text = text_det(frame, frame_id)
+                except Exception:
+                    cached_text = []
 
         for ev in cached_objs:
             if ev.type == 'plate' and s['plates']:
