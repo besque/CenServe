@@ -40,6 +40,7 @@ _settings = {
     'plates':   True,
     'cards':    True,
     'nsfw':     True,
+    # Text PII is enabled by default, but only used in screen-share mode
     'text_pii': True,
 }
 
@@ -219,7 +220,7 @@ def _streaming_thread():
     except Exception as e:
         print(f'[censerve] NSFW detector skipped: {e}')
 
-    text_det = None
+    text_pii_worker = None
 
     mp_face = None
     if not _face_app:
@@ -292,25 +293,23 @@ def _streaming_thread():
             except Exception:
                 cached_nsfw = []
 
-        # Text PII: only when enabled. Run relatively infrequently to avoid lag.
-        if s.get('text_pii'):
-            # Lazy-load detector the first time it's actually needed
-            if text_det is None:
+        # Text PII: async background worker — only in screen-share mode
+        if s.get('text_pii') and _source_mode == 'screen':
+            if text_pii_worker is None:
                 try:
-                    from censerve.video.text_pii_detector import make_text_pii_detector
-                    text_det = make_text_pii_detector(backend='easy')
-                    print('[censerve] Text PII detector loaded')
+                    from censerve.video.text_pii_detector import TextPIIWorker
+                    mode = 'screen' if _source_mode == 'screen' else 'camera'
+                    text_pii_worker = TextPIIWorker(backend='easy', mode=mode)
+                    print(f'[censerve] Text PII worker started (mode={mode})')
                 except Exception as e:
-                    print(f'[censerve] Text PII detector skipped: {e}')
-                    text_det = None
+                    print(f'[censerve] Text PII worker skipped: {e}')
 
-            # Every 20 frames in camera mode (~1–2 fps), every 10 in screen mode
-            text_cadence = 20 if _source_mode == 'camera' else 10
-            if text_det and frame_id % text_cadence == 0:
-                try:
-                    cached_text = text_det(frame, frame_id)
-                except Exception:
-                    cached_text = []
+            text_cadence = 20 if _source_mode == 'camera' else 8
+            if text_pii_worker and frame_id % text_cadence == 0:
+                text_pii_worker.submit_frame(frame, frame_id)
+
+            if text_pii_worker:
+                cached_text = text_pii_worker.latest_events
 
         for ev in cached_objs:
             if ev.type == 'plate' and s['plates']:
@@ -339,6 +338,8 @@ def _streaming_thread():
 
         frame_id += 1
 
+    if text_pii_worker:
+        text_pii_worker.stop()
     if vcam:
         vcam.close()
     with _lock:
