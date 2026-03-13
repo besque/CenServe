@@ -13,8 +13,16 @@ import numpy as np
 from ultralytics import YOLO
 from typing import List, Optional, Tuple
 import os, sys
+
+# Ensure project root is on sys.path so shared_types imports cleanly
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from shared_types import DetectionEvent
+
+
+# ─── Paths / Config ──────────────────────────────────────────────────────────
+
+# Absolute path to the packaged models directory (censerve/models)
+MODEL_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models")
 
 
 # ─── Config ───────────────────────────────────────────────────────────────────
@@ -46,6 +54,29 @@ MOTION_THRESH  = 0.003    # mean pixel diff / 255 to trigger re-detection
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
+def _resolve_model_path(path: str) -> str:
+    """
+    Resolve a model path to an absolute location.
+
+    Priority:
+      1) If path is absolute, return as-is
+      2) If basename exists under MODEL_DIR (pt or onnx), use that
+      3) Fall back to the original string (for custom callers)
+    """
+    if os.path.isabs(path):
+        return path
+
+    base = os.path.basename(path)
+    cand_pt   = os.path.join(MODEL_DIR, base if base.endswith(".pt") else base + ".pt")
+    cand_onnx = cand_pt.replace(".pt", ".onnx")
+
+    if os.path.exists(cand_pt) or os.path.exists(cand_onnx):
+        return cand_pt
+
+    # Last resort: let caller's relative path stand
+    return path
+
+
 def _load(path: str) -> Optional[YOLO]:
     """Try .onnx first (faster), fall back to .pt, return None if missing."""
     onnx = path.replace(".pt", ".onnx")
@@ -75,11 +106,24 @@ def _classify(name: str, default: str) -> str:
 class PlateCardDetector:
     def __init__(
         self,
-        plate_model_path: str = "censerve/models/plate_best.pt",
-        card_model_path:  str = "censerve/models/card_best.pt",
+        plate_model_path: str = None,
+        card_model_path:  str = None,
     ):
-        self.plate_model = _load(plate_model_path)
-        self.card_model  = _load(card_model_path)
+        # Resolve default model locations under censerve/models
+        plate_path = _resolve_model_path(plate_model_path or "plate_best.pt")
+        card_path  = _resolve_model_path(card_model_path  or "card_best.pt")
+
+        print(f"[ObjDet] Model dir: {MODEL_DIR}")
+        print(f"[ObjDet] Plate model path: {plate_path}")
+        print(f"[ObjDet] Card  model path: {card_path}")
+
+        self.plate_model = _load(plate_path)
+        self.card_model  = _load(card_path)
+
+        if self.plate_model is None:
+            print("[ObjDet] WARNING: plate model not loaded; plates will not be blurred.")
+        if self.card_model is None:
+            print("[ObjDet] WARNING: card model not loaded; cards will rely on shape fallback only.")
 
         self._prev_gray: Optional[np.ndarray] = None
         self._cached:    List[DetectionEvent] = []
