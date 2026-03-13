@@ -10,6 +10,8 @@ enrolled_faces/
 *.pkl
 .DS_Store
 
+node_modules/
+
 models/*.pt
 models/*.onnx
 models/*.bin

@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BlurBerry — Real-Time Privacy Filter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:      #07080d;
+    --surface: #0e101a;
+    --border:  #1c2030;
+    --accent:  #00e5a0;
+    --accent2: #0088ff;
+    --amber:   #f59e0b;
+    --danger:  #ff3b5c;
+    --text:    #e8eaf2;
+    --muted:   #5a607a;
+    --panel:   #0b0d17;
+  }
+  html, body { height: 100%; background: var(--bg); color: var(--text);
+    font-family: 'Syne', sans-serif; overflow: hidden; }
+
+  .page { position: fixed; inset: 0; transition: opacity 0.4s ease, transform 0.4s ease; }
+  .page.hidden { opacity: 0; pointer-events: none; transform: scale(0.97); }
+
+  /* Grid bg */
+  .grid-bg { position: fixed; inset: 0; pointer-events: none;
+    background-image: linear-gradient(var(--border) 1px, transparent 1px),
+                      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black, transparent);
+    opacity: 0.35; }
+  .glow-orb { position: fixed; pointer-events: none; width: 700px; height: 700px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(0,229,160,0.07) 0%, transparent 70%);
+    top: 50%; left: 50%; transform: translate(-50%, -62%); }
+
+  /* ── LANDING ── */
+  #landing { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .logo-badge { display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(0,229,160,0.08); border: 1px solid rgba(0,229,160,0.2);
+    border-radius: 100px; padding: 6px 16px; font-family: 'DM Mono', monospace;
+    font-size: 11px; letter-spacing: 0.15em; color: var(--accent); text-transform: uppercase;
+    margin-bottom: 28px; animation: fadeUp 0.6s ease both; }
+  .logo-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent);
+    animation: blink 2s ease infinite; }
+  h1 { font-size: clamp(52px, 7.5vw, 90px); font-weight: 800; letter-spacing: -0.03em;
+    line-height: 1; margin-bottom: 16px; animation: fadeUp 0.6s 0.1s ease both; }
+  h1 span { color: var(--accent); }
+  .tagline { font-size: 15px; color: var(--muted); font-family: 'DM Mono', monospace;
+    font-weight: 300; letter-spacing: 0.04em; margin-bottom: 48px;
+    animation: fadeUp 0.6s 0.2s ease both; }
+  .start-btn { background: var(--accent); color: #000; border: none; padding: 18px 52px;
+    font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; cursor: pointer; border-radius: 4px;
+    transition: transform 0.2s, box-shadow 0.2s; animation: fadeUp 0.6s 0.3s ease both; }
+  .start-btn:hover { transform: translateY(-2px);
+    box-shadow: 0 0 40px rgba(0,229,160,0.35), 0 8px 32px rgba(0,0,0,0.4); }
+  .start-btn:disabled { opacity: 0.5; cursor: wait; transform: none; box-shadow: none; }
+  .hint { margin-top: 20px; font-size: 12px; color: var(--muted);
+    font-family: 'DM Mono', monospace; animation: fadeUp 0.6s 0.4s ease both; }
+
+  /* ── APP ── */
+  #app { display: flex; flex-direction: column; }
+  .topbar { display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 24px; border-bottom: 1px solid var(--border);
+    background: var(--panel); flex-shrink: 0; z-index: 10; }
+  .topbar-logo { font-size: 18px; font-weight: 800; letter-spacing: -0.02em; }
+  .topbar-logo span { color: var(--accent); }
+  .live-badge { display: flex; align-items: center; gap: 7px;
+    font-family: 'DM Mono', monospace; font-size: 11px;
+    letter-spacing: 0.12em; text-transform: uppercase; }
+  .live-dot { width: 8px; height: 8px; border-radius: 50%; animation: blink 1.5s ease infinite; }
+
+  .main { display: flex; flex: 1; overflow: hidden; }
+
+  /* Video */
+  .video-panel { flex: 1; display: flex; align-items: center; justify-content: center;
+    padding: 24px; background: var(--bg); }
+  .video-wrap { position: relative; width: 100%; max-width: 900px; }
+  .video-ratio { position: relative; padding-top: 56.25%; background: #000;
+    border-radius: 6px; overflow: hidden; border: 1px solid var(--border);
+    box-shadow: 0 0 0 1px rgba(0,229,160,0.05), 0 32px 80px rgba(0,0,0,0.6); }
+  .video-ratio img { position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; display: block; }
+
+  /* Corner brackets */
+  .corner { position: absolute; width: 20px; height: 20px; z-index: 2; }
+  .corner.tl { top:-1px; left:-1px; border-top:2px solid var(--accent); border-left:2px solid var(--accent); }
+  .corner.tr { top:-1px; right:-1px; border-top:2px solid var(--accent); border-right:2px solid var(--accent); }
+  .corner.bl { bottom:-1px; left:-1px; border-bottom:2px solid var(--accent); border-left:2px solid var(--accent); }
+  .corner.br { bottom:-1px; right:-1px; border-bottom:2px solid var(--accent); border-right:2px solid var(--accent); }
+
+  /* Overlay (enrollment progress + key hints) */
+  .video-overlay {
+    position: absolute; inset: 0; z-index: 5; pointer-events: none;
+    display: flex; flex-direction: column; justify-content: flex-end;
+    padding: 0 28px 28px;
+    background: linear-gradient(transparent 55%, rgba(7,8,13,0.88) 100%);
+    transition: opacity 0.3s;
+  }
+  .video-overlay.hidden { opacity: 0; }
+
+  /* Key hint pill */
+  .key-hint {
+    display: inline-flex; align-items: center; gap: 12px;
+    margin-bottom: 14px; align-self: center;
+  }
+  .key-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; border-radius: 8px; font-weight: 700; font-size: 16px;
+    border: 2px solid; letter-spacing: 0;
+  }
+  .key-badge.accent { border-color: var(--accent); color: var(--accent);
+    background: rgba(0,229,160,0.1); }
+  .key-badge.amber  { border-color: var(--amber);  color: var(--amber);
+    background: rgba(245,158,11,0.1); }
+  .key-label { font-family: 'DM Mono', monospace; font-size: 13px; letter-spacing: 0.05em; }
+
+  /* Progress bar */
+  .progress-wrap { width: 100%; }
+  .progress-info { display: flex; justify-content: space-between;
+    font-family: 'DM Mono', monospace; font-size: 11px; color: var(--accent);
+    letter-spacing: 0.06em; margin-bottom: 8px; }
+  .progress-track { width: 100%; height: 4px; background: rgba(255,255,255,0.1);
+    border-radius: 100px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--accent); border-radius: 100px;
+    transition: width 0.25s ease; width: 0%; }
+
+  .video-label { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted);
+    letter-spacing: 0.1em; text-transform: uppercase; margin-top: 12px; text-align: center; }
+
+  /* Controls */
+  .controls-panel { width: 296px; flex-shrink: 0; border-left: 1px solid var(--border);
+    background: var(--panel); display: flex; flex-direction: column;
+    padding: 24px 18px; gap: 8px; overflow-y: auto; transition: opacity 0.3s; }
+  .controls-panel.dimmed { opacity: 0.3; pointer-events: none; }
+
+  .controls-heading { font-size: 11px; font-weight: 600; letter-spacing: 0.15em;
+    text-transform: uppercase; color: var(--muted); font-family: 'DM Mono', monospace;
+    margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+
+  .toggle-card { display: flex; align-items: center; justify-content: space-between;
+    padding: 14px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 6px; cursor: pointer; transition: border-color 0.2s, background 0.2s; gap: 10px; }
+  .toggle-card:hover { border-color: var(--muted); }
+  .toggle-card.active { border-color: rgba(0,229,160,0.3); background: rgba(0,229,160,0.04); }
+
+  .toggle-left { display: flex; align-items: center; gap: 11px; flex: 1; }
+  .toggle-icon { width: 36px; height: 36px; border-radius: 8px; background: var(--bg);
+    border: 1px solid var(--border); display: flex; align-items: center; justify-content: center;
+    font-size: 17px; flex-shrink: 0; transition: background 0.2s, border-color 0.2s; }
+  .toggle-card.active .toggle-icon { background: rgba(0,229,160,0.1); border-color: rgba(0,229,160,0.3); }
+  .toggle-info { flex: 1; }
+  .toggle-label { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.2; }
+  .toggle-desc { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; margin-top: 2px; }
+
+  .switch { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider { position: absolute; inset: 0; background: var(--border); border-radius: 100px; transition: background 0.25s; }
+  .slider::before { content: ''; position: absolute; height: 16px; width: 16px; left: 3px; top: 3px;
+    background: var(--muted); border-radius: 50%; transition: transform 0.25s, background 0.25s; }
+  .switch input:checked + .slider { background: rgba(0,229,160,0.25); }
+  .switch input:checked + .slider::before { transform: translateX(18px); background: var(--accent); }
+
+  .divider { height: 1px; background: var(--border); margin: 6px 0; }
+
+  .info-card { margin-top: auto; padding: 14px; background: rgba(0,136,255,0.06);
+    border: 1px solid rgba(0,136,255,0.18); border-radius: 6px; }
+  .info-card-label { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--accent2); margin-bottom: 6px; }
+  .info-card-text { font-size: 12px; color: var(--muted); line-height: 1.55; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(18px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<!-- LANDING -->
+<div id="landing" class="page">
+  <div class="grid-bg"></div>
+  <div class="glow-orb"></div>
+  <div style="position:relative;z-index:1;text-align:center;display:flex;flex-direction:column;align-items:center;">
+    <div class="logo-badge"><span class="logo-dot"></span>Real-Time Privacy Filter</div>
+    <h1>Blur<span>Berry</span></h1>
+    <p class="tagline">AI-powered PII redaction for any video call</p>
+    <button class="start-btn" id="startBtn" onclick="startApp()">Start Virtual Camera</button>
+    <p class="hint">Opens camera — you'll enroll your face before streaming begins</p>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" class="page hidden" style="display:flex;flex-direction:column;">
+
+  <div class="topbar">
+    <div class="topbar-logo">Blur<span>Berry</span></div>
+    <div class="live-badge" id="liveBadge" style="color:var(--muted)">
+      <span class="live-dot" style="background:var(--muted)"></span>
+      <span id="liveText">Initialising...</span>
+    </div>
+  </div>
+
+  <div class="main">
+
+    <!-- Video -->
+    <div class="video-panel">
+      <div class="video-wrap">
+        <div class="video-ratio">
+          <div class="corner tl"></div><div class="corner tr"></div>
+          <div class="corner bl"></div><div class="corner br"></div>
+          <img id="videoFeed" alt="Live feed">
+
+          <!-- Overlay: key hints + progress bar -->
+          <div class="video-overlay" id="videoOverlay">
+
+            <!-- shown when phase = ready -->
+            <div id="hintEnroll" class="key-hint" style="display:none">
+              <div class="key-badge accent">E</div>
+              <span class="key-label" style="color:var(--accent)">Press E to start face enrollment</span>
+            </div>
+
+            <!-- shown when phase = collecting -->
+            <div id="progressSection" style="display:none; width:100%;">
+              <div class="progress-wrap">
+                <div class="progress-info">
+                  <span id="enrollMsg">Scanning...</span>
+                  <span id="enrollCount">0 / 30</span>
+                </div>
+                <div class="progress-track">
+                  <div class="progress-fill" id="progressFill"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- shown when phase = enrolled -->
+            <div id="hintStream" class="key-hint" style="display:none">
+              <div class="key-badge amber">S</div>
+              <span class="key-label" style="color:var(--amber)">Face enrolled — press S to start stream</span>
+            </div>
+
+          </div>
+        </div>
+        <div class="video-label" id="videoLabel">BlurBerry · Initialising</div>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls-panel dimmed" id="controlsPanel">
+      <div class="controls-heading">Privacy Controls</div>
+
+      <div class="toggle-card active" id="card-faces" onclick="toggleFeature('faces')">
+        <div class="toggle-left">
+          <div class="toggle-icon">🙈</div>
+          <div class="toggle-info">
+            <div class="toggle-label">Face Blur</div>
+            <div class="toggle-desc">Hides non-enrolled faces</div>
+          </div>
+        </div>
+        <label class="switch" onclick="event.stopPropagation()">
+          <input type="checkbox" id="toggle-faces" checked onchange="toggleFeature('faces')">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="toggle-card active" id="card-plates" onclick="toggleFeature('plates')">
+        <div class="toggle-left">
+          <div class="toggle-icon">🚗</div>
+          <div class="toggle-info">
+            <div class="toggle-label">License Plates</div>
+            <div class="toggle-desc">Redacts plate numbers</div>
+          </div>
+        </div>
+        <label class="switch" onclick="event.stopPropagation()">
+          <input type="checkbox" id="toggle-plates" checked onchange="toggleFeature('plates')">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="toggle-card active" id="card-cards" onclick="toggleFeature('cards')">
+        <div class="toggle-left">
+          <div class="toggle-icon">💳</div>
+          <div class="toggle-info">
+            <div class="toggle-label">ID &amp; Cards</div>
+            <div class="toggle-desc">Credit cards, IDs, Aadhaar</div>
+          </div>
+        </div>
+        <label class="switch" onclick="event.stopPropagation()">
+          <input type="checkbox" id="toggle-cards" checked onchange="toggleFeature('cards')">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="toggle-card active" id="card-nsfw" onclick="toggleFeature('nsfw')">
+        <div class="toggle-left">
+          <div class="toggle-icon">🔞</div>
+          <div class="toggle-info">
+            <div class="toggle-label">NSFW Filter</div>
+            <div class="toggle-desc">Blocks sensitive content</div>
+          </div>
+        </div>
+        <label class="switch" onclick="event.stopPropagation()">
+          <input type="checkbox" id="toggle-nsfw" checked onchange="toggleFeature('nsfw')">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="info-card">
+        <div class="info-card-label">📡 Virtual Camera</div>
+        <div class="info-card-text">
+          Select <strong style="color:var(--text)">BlurBerry Virtual Camera</strong> in Zoom, Teams, or Meet as your camera source.
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  const featState = { faces: true, plates: true, cards: true, nsfw: true };
+  let lastPhase = '';
+
+  async function startApp() {
+    const btn = document.getElementById('startBtn');
+    btn.disabled = true;
+    btn.textContent = 'Starting...';
+    await fetch('/start', { method: 'POST' });
+    document.getElementById('landing').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    // Start video feed after app is visible so the request is not deferred by the browser
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() {
+        ensureVideoFeedStarted();
+      });
+    });
+    setInterval(pollStatus, 500);
+    pollStatus(); // run once so video feed starts as soon as backend reports starting/ready
+  }
+
+  async function pollStatus() {
+    try {
+      const data = await fetch('/status').then(r => r.json());
+      applyPhase(data);
+      if (data.settings) applySettingsToUI(data.settings);
+    } catch(e) {}
+  }
+
+  function applySettingsToUI(settings) {
+    ['faces', 'plates', 'cards', 'nsfw'].forEach(function(feature) {
+      if (settings[feature] === undefined) return;
+      featState[feature] = settings[feature];
+      const card = document.getElementById('card-' + feature);
+      const cb = document.getElementById('toggle-' + feature);
+      if (card) card.classList.toggle('active', !!settings[feature]);
+      if (cb) cb.checked = !!settings[feature];
+    });
+  }
+
+  function ensureVideoFeedStarted() {
+    const img = document.getElementById('videoFeed');
+    if (!img || (img.src && img.src.indexOf('/video_feed') !== -1)) return;
+    img.src = '/video_feed?t=' + Date.now();
+  }
+
+  function applyPhase(data) {
+    const phase = data.phase;
+    // Always start video feed as soon as backend can serve frames (fixes cached HTML / missed startApp set)
+    if (data.running && ['starting', 'ready', 'collecting', 'enrolled', 'streaming'].includes(phase)) {
+      ensureVideoFeedStarted();
+    }
+    if (phase === lastPhase && phase !== 'collecting') return;
+    lastPhase = phase;
+
+    const badge      = document.getElementById('liveBadge');
+    const liveText   = document.getElementById('liveText');
+    const liveDot    = badge.querySelector('.live-dot');
+    const label      = document.getElementById('videoLabel');
+    const panel      = document.getElementById('controlsPanel');
+    const overlay    = document.getElementById('videoOverlay');
+
+    // hide all overlay children first
+    document.getElementById('hintEnroll').style.display    = 'none';
+    document.getElementById('progressSection').style.display = 'none';
+    document.getElementById('hintStream').style.display    = 'none';
+    overlay.classList.remove('hidden');
+
+    if (phase === 'starting') {
+      badge.style.color  = 'var(--muted)';
+      liveDot.style.background = 'var(--muted)';
+      liveText.textContent = 'Initialising...';
+      label.textContent  = 'BlurBerry · Initialising';
+      panel.classList.add('dimmed');
+
+    } else if (phase === 'ready') {
+      badge.style.color  = 'var(--accent)';
+      liveDot.style.background = 'var(--accent)';
+      liveText.textContent = 'Ready — awaiting enrollment';
+      label.textContent  = 'BlurBerry · Press E to enroll';
+      panel.classList.add('dimmed');
+      document.getElementById('hintEnroll').style.display = 'flex';
+
+    } else if (phase === 'collecting') {
+      badge.style.color  = 'var(--amber)';
+      liveDot.style.background = 'var(--amber)';
+      liveText.textContent = 'Enrolling face...';
+      label.textContent  = 'BlurBerry · Scanning your face';
+      panel.classList.add('dimmed');
+      document.getElementById('progressSection').style.display = 'block';
+      // update progress
+      const pct = data.enroll_progress || 0;
+      document.getElementById('progressFill').style.width = pct + '%';
+      document.getElementById('enrollMsg').textContent    = data.enroll_msg || 'Scanning...';
+      document.getElementById('enrollCount').textContent  = `${Math.round(pct * 0.3)} / 30`;
+
+    } else if (phase === 'enrolled') {
+      badge.style.color  = 'var(--amber)';
+      liveDot.style.background = 'var(--amber)';
+      liveText.textContent = 'Enrolled — press S to stream';
+      label.textContent  = 'BlurBerry · Press S to start streaming';
+      panel.classList.add('dimmed');
+      document.getElementById('hintStream').style.display = 'flex';
+
+    } else if (phase === 'streaming') {
+      badge.style.color  = 'var(--danger)';
+      liveDot.style.background = 'var(--danger)';
+      liveText.textContent = 'Live — Virtual Camera Active';
+      label.textContent  = 'BlurBerry Virtual Camera · OBS Output';
+      panel.classList.remove('dimmed');
+      overlay.classList.add('hidden');
+    }
+  }
+
+  // Keyboard listener — sends E and S to server
+  document.addEventListener('keydown', async (e) => {
+    const key = e.key.toLowerCase();
+    if (key !== 'e' && key !== 's') return;
+    await fetch(`/keypress/${key}`, { method: 'POST' });
+  });
+
+  async function toggleFeature(feature) {
+    const res = await fetch(`/toggle/${feature}`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok || data.error) return;
+    featState[feature] = data.enabled;
+    const card = document.getElementById(`card-${feature}`);
+    const cb   = document.getElementById(`toggle-${feature}`);
+    if (cb) cb.checked = data.enabled;
+    if (card) card.classList.toggle('active', !!data.enabled);
+  }
+</script>
+</body>
+</html>
