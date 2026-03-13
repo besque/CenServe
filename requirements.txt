@@ -1,8 +1,27 @@
 opencv-python
 numpy
 flask
+
+# Face recognition
 insightface
 onnxruntime
+
+# Object detection
+ultralytics
+
+# NSFW detection
+nudenet
+
+# Tracking
+filterpy
+scipy
+
+# Screen / Windows integration
 mss
 pywin32
+
+# OCR for text PII
 easyocr
+
+# Optional: virtual camera output (used by virtual_camera_complete.py)
+pyvirtualcam
