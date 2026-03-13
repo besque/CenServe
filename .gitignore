@@ -1,23 +1,40 @@
 # Environments
 venv/
+.venv/
 env/
+censerve_env/
+.venv/
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.Python
+*.so
 
 # Project specific
 models/
 enrolled_faces/
 *.pkl
-.DS_Store
-
-node_modules/
-
-models/*.pt
-models/*.onnx
-models/*.bin
-venv/
-__pycache__/
-.cursor/
-*.pkl
 *.pt
 *.onnx
+*.bin
+
+# OS and IDE
+.DS_Store
+Thumbs.db
+.cursor/
+.vscode/
+.idea/
+
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+logs/
+
+# Virtual camera / temp
+*.tmp
+*.temp
