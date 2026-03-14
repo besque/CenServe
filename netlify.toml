@@ -1,7 +1,8 @@
-# Netlify config for CenServe marketing site
-# Publish the static landing page in site/
+# Netlify config for CenServe marketing site (static HTML only — no Python)
+# Base directory = site/ so Netlify never sees requirements.txt and won't run pip
 [build]
-  publish = "site"
+  base = "site"
+  publish = "."
   command = ""
 
 # Optional: redirect root to index for SPA-style routing (not needed for single index.html)

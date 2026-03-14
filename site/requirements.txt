@@ -1,0 +1,2 @@
+# Static site — no Python dependencies.
+# Netlify may run pip from the build base (site/); this file prevents errors.
