@@ -16,6 +16,8 @@ __pycache__/
 # Project specific
 models/
 enrolled_faces/
+build/
+dist/
 *.pkl
 *.pt
 *.onnx

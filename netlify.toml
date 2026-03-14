@@ -1,0 +1,11 @@
+# Netlify config for CenServe marketing site
+# Publish the static landing page in site/
+[build]
+  publish = "site"
+  command = ""
+
+# Optional: redirect root to index for SPA-style routing (not needed for single index.html)
+# [[redirects]]
+#   from = "/*"
+#   to = "/index.html"
+#   status = 200
