@@ -10,9 +10,9 @@ AV_DELAY_SECONDS = 0.0
 # Lower = more responsive but heavier on CPU.
 DETECTION_CADENCE = {
     'face':             3,
-    'objects_camera':  10,
-    'objects_screen':  15,
-    'nsfw':            15,
+    'objects_camera':  8,   # Increased from 10 for better responsiveness
+    'objects_screen':  10,  # Increased from 15 for better streaming
+    'nsfw':             8,  # Increased from 15 for better responsiveness
     'text_pii_camera': 20,
     'text_pii_screen':  5,   # 5 = request new OCR more often (blur updates a bit snappier)
 }

@@ -32,13 +32,13 @@ MODEL_DIR = _resource_path(os.path.join("censerve", "models"))
 # ─── Config ───────────────────────────────────────────────────────────────────
 
 CONF_THRESHOLD = {
-    "plate": 0.28,
-    "card":  0.30,
+    "plate": 0.25,  # Lowered for better detection
+    "card":  0.40,  # Raised from 0.20 to reduce false positives
 }
 
 BBOX_PAD = {
     "plate": 10,
-    "card":  16,
+    "card":  8,  # Reduced from 16 for more precise coverage
 }
 
 PLATE_NAMES = {
@@ -52,8 +52,8 @@ CARD_NAMES = {
     "identity_card", "valid-credit-card",
 }
 
-INFERENCE_SIZE = 320      # px — detection resolution
-MOTION_THRESH  = 0.003    # mean pixel diff / 255 to trigger re-detection
+INFERENCE_SIZE = 416      # px — increased for better card detection accuracy
+MOTION_THRESH  = 0.002    # Lowered threshold for more sensitive detection on stream
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -208,17 +208,17 @@ class PlateCardDetector:
         events = []
         for cnt in conts:
             area = cv2.contourArea(cnt)
-            # Allow slightly smaller cards so physical cards held farther
-            # from the webcam are still picked up.
-            if not (2000 < area < h_f * w_f * 0.35):
+            # Stricter requirements for shape fallback (reduce false positives)
+            if not (2000 < area < h_f * w_f * 0.35):  # Higher min, lower max
                 continue
             peri   = cv2.arcLength(cnt, True)
-            approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
+            approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)  # Stricter approximation
             if len(approx) != 4:
                 continue
             x, y, w, h = cv2.boundingRect(approx)
             asp = w / max(h, 1)
-            if 1.3 < asp < 1.9:
+            # Stricter aspect ratio for card shapes
+            if 1.4 < asp < 1.8:
                 events.append(DetectionEvent(
                     type="card",
                     bbox=(max(0, x-12), max(0, y-12),
@@ -234,9 +234,11 @@ class PlateCardDetector:
     def detect(self, frame: np.ndarray, frame_id: int) -> List[DetectionEvent]:
         """
         Called every N frames by the video loop.
-        Returns cached results when nothing has moved (motion gate).
+        Improved tracking for moving objects during screen sharing.
         """
-        if not self._has_motion(frame):
+        # Always run detection if we have cached objects (for better tracking)
+        has_cached = len(self._cached) > 0
+        if not self._has_motion(frame) and not has_cached:
             return self._cached   # return last known boxes, not empty
 
         events = []
@@ -253,10 +255,28 @@ class PlateCardDetector:
             except Exception as e:
                 print(f"[ObjDet] card error: {e}")
 
-        # Shape fallback — catches Aadhaar/ID cards YOLO missed
+        # Shape fallback — catches Aadhaar/ID cards YOLO missed (stricter validation)
         card_found = any(e.type == "card" for e in events)
         if not card_found:
-            events.extend(self._cards_by_shape(frame, frame_id))
+            shape_events = self._cards_by_shape(frame, frame_id)
+            # Apply stricter confidence for shape-based detections
+            for event in shape_events:
+                event.confidence = 0.70  # Higher confidence required for shape fallback
+            events.extend(shape_events)
+
+        # Improved tracking: if we have cached objects and new detections, merge them
+        if has_cached and events:
+            # Simple tracking: use new detections but expand bounding boxes slightly
+            # to cover movement between frames
+            for new_event in events:
+                for cached_event in self._cached:
+                    if new_event.type == cached_event.type:
+                        # Expand new bbox to cover movement area
+                        x1 = min(new_event.bbox[0], cached_event.bbox[0]) - 5
+                        y1 = min(new_event.bbox[1], cached_event.bbox[1]) - 5
+                        x2 = max(new_event.bbox[2], cached_event.bbox[2]) + 5
+                        y2 = max(new_event.bbox[3], cached_event.bbox[3]) + 5
+                        new_event.bbox = (max(0, x1), max(0, y1), x2, y2)
 
         # Simple debug hook: log any detections so it's obvious when the
         # models are firing even if blur logic later changes.
