@@ -1,8 +1,9 @@
-# shared_types.py — Person 1 creates this file
+# shared_types.py
 from dataclasses import dataclass, field
 from typing import Tuple, Literal
 
-# Set to 0 for real-time testing (no intentional AV delay)
+# Output delay (seconds). Used by VideoLoop/VirtualVideoLoop only.
+# Web server: set to 0 for real-time (no buffer). Text PII blur may appear 1–2 s late.
 AV_DELAY_SECONDS = 0.0
 
 # How often each detector receives a new frame (every N frames).
@@ -13,13 +14,14 @@ DETECTION_CADENCE = {
     'objects_screen':  15,
     'nsfw':            15,
     'text_pii_camera': 20,
-    'text_pii_screen':  8,
+    'text_pii_screen':  5,   # 5 = request new OCR more often (blur updates a bit snappier)
 }
 
 # Cached detection results older than this many frames are discarded.
-# At 30 fps, 45 frames ≈ 1.5 seconds — enough to avoid stale blur
-# sticking to a region after content moves.
-CACHE_TTL_FRAMES = 45
+# At 30 fps, 30 frames ≈ 1 second — short enough that blur doesn't
+# stick to a region after content moves, but long enough for smooth
+# coverage between detector runs.
+CACHE_TTL_FRAMES = 30
 
 @dataclass
 class DetectionEvent:
@@ -36,6 +38,6 @@ class PipelineConfig:
     blur_cards: bool = True
     blur_nsfw: bool = True
     blur_text_pii: bool = True
-    detection_cadence: int = 15     # run detection every N frames
+    detection_cadence: int = 15    
     blur_strength: int = 51         # gaussian kernel size (must be odd number)
     face_similarity_threshold: float = 0.4

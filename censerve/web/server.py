@@ -6,16 +6,24 @@ Open:   http://localhost:5000
 """
 
 import sys, os, time, threading, pickle, cv2, numpy as np
+from collections import deque
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+def resource_path(relative):
+    """Resolve a path that works both in dev and inside a PyInstaller bundle."""
+    base = getattr(sys, '_MEIPASS', os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    return os.path.join(base, relative)
+
+
+ROOT = getattr(sys, '_MEIPASS', os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 sys.path.insert(0, ROOT)
 
 from flask import Flask, Response, jsonify, send_from_directory, request
-from shared_types import DETECTION_CADENCE, CACHE_TTL_FRAMES
+from shared_types import DETECTION_CADENCE, CACHE_TTL_FRAMES, AV_DELAY_SECONDS
 
 app    = Flask(__name__)
-STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
-ENROLLED_DIR  = os.path.join(ROOT, 'enrolled_faces')
+STATIC = resource_path(os.path.join('censerve', 'web', 'static'))
+ENROLLED_DIR  = resource_path('enrolled_faces')
 ENROLLED_FILE = os.path.join(ENROLLED_DIR, 'faces.pkl')
 os.makedirs(ENROLLED_DIR, exist_ok=True)
 
@@ -295,6 +303,10 @@ def _streaming_thread():
             pass
 
     frame_id = 0
+    use_delay = AV_DELAY_SECONDS > 0
+    frame_buffer = deque(maxlen=60) if use_delay else None  # ~2 s at 30 fps
+    if use_delay:
+        print(f'[censerve] Display buffer: {AV_DELAY_SECONDS}s (OCR has time to finish before frame is shown)')
     print('[censerve] Streaming...')
 
     while _running:
@@ -311,13 +323,31 @@ def _streaming_thread():
             s = dict(_settings)
 
         is_screen = (_source_mode == 'screen')
-        output = frame.copy()
+
+        # When AV_DELAY_SECONDS > 0, buffer frames and show each only after delay so OCR is ready
+        if use_delay and frame_buffer is not None:
+            now = time.monotonic()
+            frame_buffer.append((now + AV_DELAY_SECONDS, frame.copy(), frame_id))
+            display_item = None
+            while frame_buffer and frame_buffer[0][0] <= now:
+                display_item = frame_buffer.popleft()
+            if display_item is None and frame_buffer:
+                display_item = frame_buffer.popleft()
+            if display_item is None:
+                frame_id += 1
+                continue
+            _, display_frame, display_fid = display_item
+            output = display_frame.copy()
+            output_fid = display_fid
+        else:
+            output = frame.copy()
+            output_fid = frame_id
 
         # ── Face blur (camera only) ──────────────────────────────────────
         if not is_screen and s['faces']:
             if _face_app:
                 try:
-                    for f in _face_app.get(frame):
+                    for f in _face_app.get(output):
                         if not _is_owner(f.normed_embedding):
                             x1, y1, x2, y2 = [int(v) for v in f.bbox]
                             _blur_region(output, x1-20, y1-20, x2+20, y2+20, _blur_strength)
@@ -325,10 +355,10 @@ def _streaming_thread():
                     pass
             elif mp_face:
                 try:
-                    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    rgb = cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
                     res = mp_face.process(rgb)
                     if res.detections:
-                        ih, iw = frame.shape[:2]
+                        ih, iw = output.shape[:2]
                         for det in res.detections:
                             bb = det.location_data.relative_bounding_box
                             _blur_region(output,
@@ -355,12 +385,21 @@ def _streaming_thread():
                 try:
                     from censerve.video.text_pii_detector import TextPIIWorker
                     mode = 'screen' if is_screen else 'camera'
-                    text_pii_worker = TextPIIWorker(backend='easy', mode=mode)
-                    print(f'[censerve] Text PII worker started (mode={mode})')
+                    # Try PaddleOCR first (faster, better accuracy); fall back to EasyOCR
+                    try:
+                        import paddleocr  # noqa: F401
+                        _tpii_backend = 'paddle'
+                    except ImportError:
+                        _tpii_backend = 'easy'
+                    text_pii_worker = TextPIIWorker(backend=_tpii_backend, mode=mode)
+                    print(f'[censerve] Text PII worker started (backend={_tpii_backend}, mode={mode})')
                 except Exception as e:
                     print(f'[censerve] Text PII worker skipped: {e}')
-            if text_pii_worker and frame_id % text_cadence == 0:
-                text_pii_worker.submit_frame(frame, frame_id)
+            if text_pii_worker:
+                if use_delay:
+                    text_pii_worker.submit_frame(frame, frame_id)  # every frame so delayed display has OCR
+                elif frame_id % text_cadence == 0:
+                    text_pii_worker.submit_frame(frame, frame_id)
 
         # ── Read cached results + TTL expiry ─────────────────────────────
         cached_objs = []
@@ -377,10 +416,13 @@ def _streaming_thread():
 
         cached_text = []
         if text_pii_worker and s.get('text_pii'):
-            evts = text_pii_worker.latest_events
-            fid = text_pii_worker.last_result_fid
-            if evts and fid >= 0 and (frame_id - fid) <= CACHE_TTL_FRAMES:
-                cached_text = evts
+            if use_delay:
+                cached_text = text_pii_worker.get_events_for_frame(output_fid)
+            else:
+                evts = text_pii_worker.latest_events
+                fid = text_pii_worker.last_result_fid
+                if evts and fid >= 0 and (frame_id - fid) <= CACHE_TTL_FRAMES:
+                    cached_text = evts
 
         # ── Apply blur from all detectors ────────────────────────────────
         for ev in cached_objs:

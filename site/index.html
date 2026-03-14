@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CenServe — Real-Time Privacy for Live Video</title>
+<meta name="description" content="AI-powered PII redaction for live video. Blurs faces, plates, cards, and text before your stream reaches anyone. Free download, Windows only.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:       #06070f;
+  --surface:  #0d0f1a;
+  --accent:   #00e5a0;
+  --accent2:  #0077ff;
+  --text:     #e2e4f0;
+  --muted:    #4a5068;
+  --border:   #161828;
+}
+html {
+  scroll-behavior: smooth;
+  background: var(--bg);
+  color: var(--text);
+}
+body {
+  font-family: 'DM Mono', monospace;
+  background: var(--bg);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Noise overlay ─────────────────────────────────────────────────────── */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 256px 256px;
+}
+
+/* ── Grid background ───────────────────────────────────────────────────── */
+.grid-bg {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, black, transparent);
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, black, transparent);
+  opacity: 0.3;
+}
+
+/* ── Utility ───────────────────────────────────────────────────────────── */
+.container {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 28px;
+}
+.section-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 48px;
+  text-align: center;
+}
+
+/* ── Scroll reveal ─────────────────────────────────────────────────────── */
+.reveal {
+  opacity: 0;
+  transform: translateY(32px);
+  transition: opacity 0.7s ease, transform 0.7s ease;
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   NAVIGATION
+   ══════════════════════════════════════════════════════════════════════ */
+.nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 32px;
+  transition: background 0.3s, border-color 0.3s, backdrop-filter 0.3s;
+  border-bottom: 1px solid transparent;
+}
+.nav.scrolled {
+  background: rgba(6,7,15,0.82);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom-color: var(--border);
+}
+.nav-logo {
+  font-family: 'Syne', sans-serif;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: var(--text);
+}
+.nav-logo span { color: var(--accent); }
+.nav-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: blink 2s ease infinite;
+}
+.nav-links {
+  display: flex;
+  gap: 32px;
+  align-items: center;
+}
+.nav-links a {
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  color: var(--muted);
+  text-decoration: none;
+  letter-spacing: 0.04em;
+  transition: color 0.2s;
+}
+.nav-links a:hover { color: var(--text); }
+.hamburger {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  flex-direction: column;
+  gap: 5px;
+  padding: 4px;
+}
+.hamburger span {
+  display: block;
+  width: 22px;
+  height: 2px;
+  background: var(--muted);
+  transition: transform 0.3s, opacity 0.3s;
+}
+.mobile-menu {
+  display: none;
+  position: fixed;
+  top: 56px;
+  left: 0;
+  right: 0;
+  background: rgba(6,7,15,0.96);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+  padding: 20px 32px;
+  flex-direction: column;
+  gap: 16px;
+  z-index: 99;
+}
+.mobile-menu.open { display: flex; }
+.mobile-menu a {
+  font-family: 'DM Mono', monospace;
+  font-size: 14px;
+  color: var(--muted);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.mobile-menu a:hover { color: var(--text); }
+
+@media (max-width: 640px) {
+  .nav-links { display: none; }
+  .hamburger { display: flex; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   HERO
+   ══════════════════════════════════════════════════════════════════════ */
+.hero {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 120px 28px 80px;
+}
+.hero-glow {
+  position: absolute;
+  width: 800px;
+  height: 800px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0,229,160,0.06) 0%, transparent 70%);
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0,229,160,0.07);
+  border: 1px solid rgba(0,229,160,0.2);
+  border-radius: 100px;
+  padding: 7px 18px;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+  text-transform: uppercase;
+  margin-bottom: 36px;
+  position: relative;
+  z-index: 1;
+}
+.hero-badge .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: blink 2s ease infinite;
+}
+.hero h1 {
+  font-family: 'Syne', sans-serif;
+  font-size: clamp(56px, 8vw, 96px);
+  font-weight: 800;
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+  margin-bottom: 24px;
+  position: relative;
+  z-index: 1;
+}
+.hero h1 .word {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(24px);
+  animation: wordReveal 0.6s ease forwards;
+}
+.hero h1 .word:nth-child(1) { animation-delay: 0.1s; }
+.hero h1 .word:nth-child(2) { animation-delay: 0.25s; }
+.hero h1 .line2 .word:nth-child(1) { animation-delay: 0.4s; }
+.hero h1 .word.green { color: var(--accent); }
+.hero-sub {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.7;
+  max-width: 520px;
+  margin: 0 auto 44px;
+  position: relative;
+  z-index: 1;
+  font-weight: 300;
+  letter-spacing: 0.02em;
+}
+.dl-btn {
+  display: inline-block;
+  background: var(--accent);
+  color: #000;
+  border: none;
+  padding: 18px 52px;
+  font-family: 'Syne', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-decoration: none;
+  border-radius: 4px;
+  cursor: pointer;
+  position: relative;
+  z-index: 1;
+  transition: transform 0.2s, box-shadow 0.2s;
+  animation: glowPulse 3s ease-in-out infinite;
+}
+.dl-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 48px rgba(0,229,160,0.35), 0 8px 32px rgba(0,0,0,0.4);
+}
+.hero-version {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 16px;
+  position: relative;
+  z-index: 1;
+  letter-spacing: 0.03em;
+}
+.hero-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 20px;
+  position: relative;
+  z-index: 1;
+  letter-spacing: 0.03em;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.hero-stats .sep { color: var(--border); }
+.scroll-hint {
+  position: absolute;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  opacity: 0;
+  animation: scrollFadeIn 0.6s 2s ease forwards, scrollBounce 2s 2.6s ease-in-out infinite;
+  z-index: 1;
+}
+.scroll-hint svg {
+  width: 20px;
+  height: 20px;
+  stroke: var(--muted);
+  fill: none;
+  stroke-width: 2;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   HOW IT WORKS
+   ══════════════════════════════════════════════════════════════════════ */
+.how {
+  padding: 120px 0;
+  position: relative;
+  z-index: 1;
+}
+.how-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+}
+.how-step {
+  padding: 0 36px;
+  position: relative;
+}
+.how-step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 1px;
+  background: var(--border);
+}
+.step-num {
+  font-family: 'Syne', sans-serif;
+  font-size: 64px;
+  font-weight: 800;
+  color: rgba(0,229,160,0.08);
+  line-height: 1;
+  margin-bottom: 16px;
+}
+.step-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+.step-desc {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.65;
+  font-weight: 300;
+}
+@media (max-width: 768px) {
+  .how-grid {
+    grid-template-columns: 1fr;
+    gap: 48px;
+  }
+  .how-step::after { display: none; }
+  .how-step { padding: 0; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   FEATURES
+   ══════════════════════════════════════════════════════════════════════ */
+.features {
+  padding: 100px 0 120px;
+  position: relative;
+  z-index: 1;
+}
+.feat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.feat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 28px 24px;
+  transition: border-color 0.25s, transform 0.25s, box-shadow 0.25s;
+}
+.feat-card:hover {
+  border-color: rgba(0,229,160,0.35);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+.feat-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  margin-bottom: 18px;
+}
+.feat-label {
+  font-family: 'Syne', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.feat-desc {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.6;
+  font-weight: 300;
+}
+@media (max-width: 768px) {
+  .feat-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 480px) {
+  .feat-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   WORKS WITH
+   ══════════════════════════════════════════════════════════════════════ */
+.works {
+  padding: 80px 0 100px;
+  position: relative;
+  z-index: 1;
+}
+.works-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.works-app {
+  font-size: 14px;
+  color: var(--muted);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+.works-sep {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--border);
+  flex-shrink: 0;
+}
+.works-note {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  font-weight: 300;
+  opacity: 0.7;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SPECS
+   ══════════════════════════════════════════════════════════════════════ */
+.specs {
+  padding: 80px 0 120px;
+  position: relative;
+  z-index: 1;
+}
+.specs-table {
+  max-width: 720px;
+  margin: 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.spec-row {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.spec-row:last-child { border-bottom: none; }
+.spec-key {
+  width: 200px;
+  flex-shrink: 0;
+  padding: 14px 20px;
+  color: var(--muted);
+  font-weight: 400;
+  background: rgba(13,15,26,0.5);
+}
+.spec-val {
+  flex: 1;
+  padding: 14px 20px;
+  color: var(--accent);
+  font-weight: 400;
+}
+@media (max-width: 640px) {
+  .spec-row { flex-direction: column; }
+  .spec-key { width: 100%; padding: 12px 16px 4px; }
+  .spec-val { padding: 4px 16px 12px; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   DOWNLOAD CTA
+   ══════════════════════════════════════════════════════════════════════ */
+.cta {
+  position: relative;
+  padding: 120px 0;
+  text-align: center;
+  z-index: 1;
+}
+.cta-glow {
+  position: absolute;
+  width: 700px;
+  height: 700px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0,229,160,0.05) 0%, transparent 70%);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.cta h2 {
+  font-family: 'Syne', sans-serif;
+  font-size: clamp(28px, 4vw, 44px);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: 16px;
+  position: relative;
+  z-index: 1;
+}
+.cta-sub {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 40px;
+  font-weight: 300;
+  position: relative;
+  z-index: 1;
+}
+.cta-notes {
+  margin-top: 28px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.8;
+  position: relative;
+  z-index: 1;
+}
+.cta-notes a {
+  color: var(--accent2);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.cta-notes a:hover { color: var(--accent); }
+
+/* ── Corner brackets ──────────────────────────────────────────────────── */
+.cta-bracket {
+  position: relative;
+  display: inline-block;
+  padding: 60px 80px;
+}
+.cta-bracket::before,
+.cta-bracket::after,
+.cta-bracket .br-bl::before,
+.cta-bracket .br-bl::after {
+  content: '';
+  position: absolute;
+  width: 24px;
+  height: 24px;
+}
+.cta-bracket::before {
+  top: 0; left: 0;
+  border-top: 2px solid var(--accent);
+  border-left: 2px solid var(--accent);
+}
+.cta-bracket::after {
+  top: 0; right: 0;
+  border-top: 2px solid var(--accent);
+  border-right: 2px solid var(--accent);
+}
+.cta-bracket .br-bl::before {
+  bottom: 0; left: 0;
+  border-bottom: 2px solid var(--accent);
+  border-left: 2px solid var(--accent);
+}
+.cta-bracket .br-bl::after {
+  bottom: 0; right: 0;
+  border-bottom: 2px solid var(--accent);
+  border-right: 2px solid var(--accent);
+}
+@media (max-width: 480px) {
+  .cta-bracket { padding: 40px 24px; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   FOOTER
+   ══════════════════════════════════════════════════════════════════════ */
+.footer {
+  position: relative;
+  z-index: 1;
+  border-top: 1px solid var(--border);
+  padding: 28px 0;
+}
+.footer-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--muted);
+}
+.footer-logo {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 14px;
+  color: var(--text);
+}
+.footer-logo span { color: var(--accent); }
+.footer-center { font-weight: 300; }
+.footer a {
+  color: var(--muted);
+  transition: color 0.2s;
+}
+.footer a:hover { color: var(--text); }
+@media (max-width: 640px) {
+  .footer-inner {
+    flex-direction: column;
+    gap: 12px;
+    text-align: center;
+  }
+}
+
+/* ── Animations ────────────────────────────────────────────────────────── */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+@keyframes wordReveal {
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(0,229,160,0.12); }
+  50% { box-shadow: 0 0 32px rgba(0,229,160,0.22); }
+}
+@keyframes scrollFadeIn {
+  to { opacity: 1; }
+}
+@keyframes scrollBounce {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(6px); }
+}
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SECTION 1 — NAVIGATION
+     ═══════════════════════════════════════════════════════════════════ -->
+<nav class="nav" id="nav">
+  <a href="#" class="nav-logo">Cen<span>Serve</span><span class="nav-dot"></span></a>
+  <div class="nav-links">
+    <a href="#how">How it Works</a>
+    <a href="#features">Features</a>
+    <a href="#download">Download</a>
+  </div>
+  <button class="hamburger" id="hamburger" aria-label="Menu">
+    <span></span><span></span><span></span>
+  </button>
+</nav>
+<div class="mobile-menu" id="mobileMenu">
+  <a href="#how" onclick="closeMobile()">How it Works</a>
+  <a href="#features" onclick="closeMobile()">Features</a>
+  <a href="#download" onclick="closeMobile()">Download</a>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SECTION 2 — HERO
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="hero">
+  <div class="hero-glow"></div>
+
+  <div class="hero-badge">
+    <span class="dot"></span>
+    Real-Time Privacy Filter &middot; Windows
+  </div>
+
+  <h1>
+    <span class="word">Your&nbsp;</span><span class="word">Stream.</span><br>
+    <span class="word">Your&nbsp;</span><span class="word green">Privacy.</span>
+  </h1>
+
+  <p class="hero-sub">
+    AI-powered PII redaction before your video reaches anyone.<br>
+    Faces &middot; Plates &middot; Cards &middot; Text — all blurred automatically.
+  </p>
+
+  <a href="https://github.com/besque/CenServe/releases/download/v1.0.0/CenServe.exe"
+     download="CenServe.exe" class="dl-btn">
+    Download for Windows — Free
+  </a>
+
+  <p class="hero-version">v1.0 &middot; Requires OBS for virtual camera output</p>
+
+  <div class="hero-stats">
+    <span>5 Privacy Filters</span>
+    <span class="sep">&middot;</span>
+    <span>Real-Time</span>
+    <span class="sep">&middot;</span>
+    <span>Zero Cloud</span>
+  </div>
+
+  <div class="scroll-hint">
+    <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SECTION 3 — HOW IT WORKS
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="how" id="how">
+  <div class="container">
+    <div class="section-label reveal">How It Works</div>
+    <div class="how-grid">
+
+      <div class="how-step reveal">
+        <div class="step-num">01</div>
+        <div class="step-title">Download &amp; Launch</div>
+        <div class="step-desc">
+          Run the exe. No installation wizard, no Python, no setup.
+          CenServe opens in your browser at localhost.
+        </div>
+      </div>
+
+      <div class="how-step reveal">
+        <div class="step-num">02</div>
+        <div class="step-title">Enroll Your Face</div>
+        <div class="step-desc">
+          Look at the camera for one second. CenServe learns your face
+          and will never blur it. Up to 5 people can be whitelisted.
+        </div>
+      </div>
+
+      <div class="how-step reveal">
+        <div class="step-num">03</div>
+        <div class="step-title">Stream with Confidence</div>
+        <div class="step-desc">
+          Select CenServe Virtual Camera in Zoom, Meet, or OBS.
+          Everything sensitive is blurred before anyone sees it.
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SECTION 4 — FEATURES
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="features" id="features">
+  <div class="container">
+    <div class="section-label reveal">What Gets Protected</div>
+    <div class="feat-grid">
+
+      <div class="feat-card reveal">
+        <div class="feat-icon">🙈</div>
+        <div class="feat-label">Face Blur</div>
+        <div class="feat-desc">Non-enrolled faces are automatically detected and blurred every frame.</div>
+      </div>
+
+      <div class="feat-card reveal">
+        <div class="feat-icon">🚗</div>
+        <div class="feat-label">License Plates</div>
+        <div class="feat-desc">YOLO-powered plate detection. Numbers never appear on stream.</div>
+      </div>
+
+      <div class="feat-card reveal">
+        <div class="feat-icon">💳</div>
+        <div class="feat-label">ID &amp; Cards</div>
+        <div class="feat-desc">Credit cards, Aadhaar, and ID documents blurred by object detection.</div>
+      </div>
+
+      <div class="feat-card reveal">
+        <div class="feat-icon">🔤</div>
+        <div class="feat-label">Text PII</div>
+        <div class="feat-desc">OCR scans for Aadhaar numbers, phone numbers, OTPs, and passwords.</div>
+      </div>
+
+      <div class="feat-card reveal">
+        <div class="feat-icon">🔞</div>
+        <div class="feat-label">NSFW Filter</div>
+        <div class="feat-desc">NudeNet detects and blurs sensitive content before it goes live.</div>
+      </div>
+
+      <div class="feat-card reveal">
+        <div class="feat-icon">🖥️</div>
+        <div class="feat-label">Screen Share Mode</div>
+        <div class="feat-desc">Share your screen with PII and NSFW blurring — no face detection needed.</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SECTION 5 — WORKS WITH
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="works">
+  <div class="container">
+    <div class="section-label reveal">Works With</div>
+    <div class="works-row reveal">
+      <span class="works-app">OBS Studio</span>
+      <span class="works-sep"></span>
+      <span class="works-app">Zoom</span>
+      <span class="works-sep"></span>
+      <span class="works-app">Google Meet</span>
+      <span class="works-sep"></span>
+      <span class="works-app">Microsoft Teams</span>
+      <span class="works-sep"></span>
+      <span class="works-app">YouTube Live</span>
+    </div>
+    <p class="works-note reveal">Select 'CenServe Virtual Camera' as your camera source in any app.</p>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SECTION 6 — SPECS
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="specs">
+  <div class="container">
+    <div class="section-label reveal">Under the Hood</div>
+    <div class="specs-table reveal">
+      <div class="spec-row">
+        <div class="spec-key">Face Detection</div>
+        <div class="spec-val">InsightFace buffalo_sc &middot; every frame</div>
+      </div>
+      <div class="spec-row">
+        <div class="spec-key">Object Detection</div>
+        <div class="spec-val">YOLOv8 ONNX &middot; plates + cards</div>
+      </div>
+      <div class="spec-row">
+        <div class="spec-key">NSFW Detection</div>
+        <div class="spec-val">NudeNet &middot; every 15 frames</div>
+      </div>
+      <div class="spec-row">
+        <div class="spec-key">Text PII</div>
+        <div class="spec-val">EasyOCR + regex &middot; every 5 frames</div>
+      </div>
+      <div class="spec-row">
+        <div class="spec-key">Blur Method</div>
+        <div class="spec-val">Gaussian kernel &middot; mathematically irreversible</div>
+      </div>
+      <div class="spec-row">
+        <div class="spec-key">Output</div>
+        <div class="spec-val">OBS Virtual Camera &middot; 1280&times;720 @ 30fps</div>
+      </div>
+      <div class="spec-row">
+        <div class="spec-key">Runs On</div>
+        <div class="spec-val">Windows &middot; fully local &middot; zero cloud</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SECTION 7 — DOWNLOAD CTA
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="cta" id="download">
+  <div class="cta-glow"></div>
+  <div class="container">
+    <div class="cta-bracket reveal">
+      <span class="br-bl"></span>
+      <h2>Ready to stream privately?</h2>
+      <p class="cta-sub">Free download. No account. No cloud. Runs entirely on your machine.</p>
+      <a href="https://github.com/besque/CenServe/releases/download/v1.0.0/CenServe.exe"
+         download="CenServe.exe" class="dl-btn">
+        Download for Windows — Free
+      </a>
+      <div class="cta-notes">
+        ⚠ Requires OBS Virtual Camera —
+        <a href="https://obsproject.com/download" target="_blank" rel="noopener">Download OBS &rarr;</a><br>
+        First launch downloads AI models (~200MB). Needs internet once.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SECTION 8 — FOOTER
+     ═══════════════════════════════════════════════════════════════════ -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer-inner">
+      <div class="footer-logo">Cen<span>Serve</span></div>
+      <div class="footer-center">Built for BlurBerry AI Hackathon 2026</div>
+      <a href="https://github.com/besque/CenServe" target="_blank" rel="noopener" aria-label="GitHub">
+        <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
+          0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15
+          -.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87
+          .51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12
+          0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82
+          2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65
+          3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013
+          0 0016 8c0-4.42-3.58-8-8-8z"/>
+        </svg>
+      </a>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function() {
+  // ── Nav scroll effect ──
+  var nav = document.getElementById('nav');
+  window.addEventListener('scroll', function() {
+    nav.classList.toggle('scrolled', window.scrollY > 80);
+  }, { passive: true });
+
+  // ── Mobile menu ──
+  var hamburger = document.getElementById('hamburger');
+  var mobileMenu = document.getElementById('mobileMenu');
+  hamburger.addEventListener('click', function() {
+    mobileMenu.classList.toggle('open');
+  });
+  window.closeMobile = function() {
+    mobileMenu.classList.remove('open');
+  };
+
+  // ── Intersection Observer for scroll reveal ──
+  var reveals = document.querySelectorAll('.reveal');
+  var delay = 0;
+  var observer = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+      if (entry.isIntersecting) {
+        var el = entry.target;
+        var stagger = el.dataset.stagger || 0;
+        setTimeout(function() {
+          el.classList.add('visible');
+        }, stagger);
+        observer.unobserve(el);
+      }
+    });
+  }, { threshold: 0.15 });
+
+  reveals.forEach(function(el, i) {
+    var parent = el.parentElement;
+    var siblings = parent.querySelectorAll(':scope > .reveal');
+    var idx = Array.prototype.indexOf.call(siblings, el);
+    el.dataset.stagger = idx * 100;
+    observer.observe(el);
+  });
+})();
+</script>
+</body>
+</html>

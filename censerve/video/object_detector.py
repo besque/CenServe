@@ -21,8 +21,12 @@ from shared_types import DetectionEvent
 
 # ─── Paths / Config ──────────────────────────────────────────────────────────
 
-# Absolute path to the packaged models directory (censerve/models)
-MODEL_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models")
+def _resource_path(relative):
+    """Resolve path inside PyInstaller bundle or from source tree."""
+    base = getattr(sys, '_MEIPASS', os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+    return os.path.join(base, relative)
+
+MODEL_DIR = _resource_path(os.path.join("censerve", "models"))
 
 
 # ─── Config ───────────────────────────────────────────────────────────────────

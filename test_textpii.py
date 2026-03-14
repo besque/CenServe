@@ -26,7 +26,15 @@ else:
     print('[Test] Capturing webcam')
 
 mode = 'screen' if USE_SCREEN else 'camera'
-worker = TextPIIWorker(backend='easy', mode=mode)
+
+try:
+    import paddleocr  # noqa: F401
+    _backend = 'paddle'
+except ImportError:
+    _backend = 'easy'
+print(f'[Test] OCR backend: {_backend}')
+
+worker = TextPIIWorker(backend=_backend, mode=mode)
 
 frame_id = 0
 SUBMIT_EVERY = 8 if USE_SCREEN else 20
