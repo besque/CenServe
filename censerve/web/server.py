@@ -129,14 +129,27 @@ class _BackgroundWorker:
 
 # ── Helpers ───────────────────────────────────────────────────────────────
 
-def _blur_region(frame, x1, y1, x2, y2, strength=55):
+def _blur_region(frame, x1, y1, x2, y2, strength=55, oval=False):
+    """Blur a region. If oval=True, use elliptical mask (better for faces)."""
     h, w = frame.shape[:2]
     x1, y1 = max(0, x1), max(0, y1)
     x2, y2 = min(w, x2), min(h, y2)
     if x2 <= x1 or y2 <= y1:
         return
+    roi = frame[y1:y2, x1:x2].copy()
     k = strength if strength % 2 == 1 else strength + 1
-    frame[y1:y2, x1:x2] = cv2.GaussianBlur(frame[y1:y2, x1:x2], (k, k), 0)
+    blurred = cv2.GaussianBlur(roi, (k, k), 0)
+    if oval:
+        kh, kw = roi.shape[:2]
+        mask = np.zeros((kh, kw), dtype=np.uint8)
+        center = (kw // 2, kh // 2)
+        axes = (kw // 2, kh // 2)
+        cv2.ellipse(mask, center, axes, 0, 0, 360, 255, -1)
+        mask_3ch = np.expand_dims(mask, axis=2)
+        roi = np.where(mask_3ch > 0, blurred, roi)
+    else:
+        roi = blurred
+    frame[y1:y2, x1:x2] = roi
 
 def _cosine(a, b):
     return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-6))
@@ -241,7 +254,7 @@ def _pre_stream_thread():
                 for f in _face_app.get(frame):
                     if not _is_owner(f.normed_embedding):
                         x1, y1, x2, y2 = [int(v) for v in f.bbox]
-                        _blur_region(output, x1-20, y1-20, x2+20, y2+20, _blur_strength)
+                        _blur_region(output, x1-20, y1-20, x2+20, y2+20, _blur_strength, oval=True)
             except Exception:
                 pass
 
@@ -354,7 +367,7 @@ def _streaming_thread():
                     for f in _face_app.get(output):
                         if not _is_owner(f.normed_embedding):
                             x1, y1, x2, y2 = [int(v) for v in f.bbox]
-                            _blur_region(output, x1-20, y1-20, x2+20, y2+20, _blur_strength)
+                            _blur_region(output, x1-20, y1-20, x2+20, y2+20, _blur_strength, oval=True)
                 except Exception:
                     pass
             elif mp_face:
@@ -368,7 +381,7 @@ def _streaming_thread():
                             _blur_region(output,
                                 int(bb.xmin*iw)-20, int(bb.ymin*ih)-20,
                                 int((bb.xmin+bb.width)*iw)+20,
-                                int((bb.ymin+bb.height)*ih)+20, _blur_strength)
+                                int((bb.ymin+bb.height)*ih)+20, _blur_strength, oval=True)
                 except Exception:
                     pass
 
@@ -534,10 +547,12 @@ def toggle(feature):
 @app.route('/status')
 def get_status():
     with _lock:
+        s = dict(_settings)
+        s['blur_strength'] = _blur_strength
         return jsonify({
             'running':  _running,
             'phase':    _state['phase'],
-            'settings': dict(_settings),
+            'settings': s,
         })
 
 @app.route('/stop', methods=['POST'])

@@ -146,6 +146,22 @@
   .switch input:checked + .slider::before { transform: translateX(18px); background: var(--accent); }
   .divider { height: 1px; background: var(--border); margin: 2px 0; flex-shrink: 0; }
 
+  /* Blur strength slider */
+  .blur-slider-card { padding: 12px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 6px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+  .blur-slider-label { display: flex; justify-content: space-between; align-items: center;
+    font-size: 13px; font-weight: 600; color: var(--text); }
+  .blur-slider-value { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--accent); }
+  .blur-range { width: 100%; height: 6px; -webkit-appearance: none; appearance: none;
+    background: var(--border); border-radius: 100px; outline: none; }
+  .blur-range::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px;
+    border-radius: 50%; background: var(--accent); cursor: pointer;
+    box-shadow: 0 0 8px rgba(0,229,160,0.4); }
+  .blur-range::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%;
+    background: var(--accent); cursor: pointer; border: none; }
+  .blur-range::-webkit-slider-runnable-track { height: 6px; border-radius: 100px; }
+  .blur-range::-moz-range-track { height: 6px; border-radius: 100px; background: var(--border); }
+
   /* ── FACE PANEL ── */
   .face-panel { background: var(--surface); border: 1px solid var(--border);
     border-radius: 6px; padding: 14px; display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; }
@@ -401,6 +417,15 @@
         </label>
       </div>
 
+      <div class="blur-slider-card">
+        <div class="blur-slider-label">
+          <span>Blur Strength</span>
+          <span class="blur-slider-value" id="blurStrengthValue">55</span>
+        </div>
+        <input type="range" class="blur-range" id="blurStrengthSlider" min="11" max="99" value="55" step="2"
+          oninput="onBlurStrengthChange(this.value)">
+      </div>
+
       <div class="toggle-card active" id="card-plates" onclick="toggleFeature('plates')">
         <div class="toggle-left">
           <div class="toggle-icon">🚗</div>
@@ -547,6 +572,7 @@ const sourceState = { mode:'camera', source:null };
 let lastPhase          = '';
 let _preEnrollTimer    = null;
 let _streamEnrollTimer = null;
+let _blurDebounce      = null;
 
 // ══════════════════════════════════════
 //  BOOT
@@ -588,6 +614,30 @@ function applySettingsToUI(s) {
     if (card) card.classList.toggle('active', !!s[f]);
     if (cb)   cb.checked = !!s[f];
   });
+  if (s.blur_strength !== undefined) {
+    const slider = document.getElementById('blurStrengthSlider');
+    const valEl  = document.getElementById('blurStrengthValue');
+    if (slider) { slider.value = s.blur_strength; }
+    if (valEl)  { valEl.textContent = s.blur_strength; }
+  }
+}
+
+function onBlurStrengthChange(val) {
+  const v = parseInt(val, 10);
+  document.getElementById('blurStrengthValue').textContent = v;
+  clearTimeout(_blurDebounce);
+  _blurDebounce = setTimeout(function() {
+    fetch('/blur_strength', { method:'POST',
+      headers:{'Content-Type':'application/json'}, body:JSON.stringify({value:v}) })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.blur_strength !== undefined) {
+          document.getElementById('blurStrengthValue').textContent = data.blur_strength;
+          document.getElementById('blurStrengthSlider').value = data.blur_strength;
+        }
+      })
+      .catch(function() {});
+  }, 150);
 }
 
 // ══════════════════════════════════════

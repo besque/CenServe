@@ -3,14 +3,39 @@ import numpy as np
 from typing import List
 from shared_types import DetectionEvent, PipelineConfig
 
+def _blur_region(output: np.ndarray, x1: int, y1: int, x2: int, y2: int,
+                 k: int, oval: bool = False) -> None:
+    """Blur a region. If oval=True, use elliptical mask (better for faces)."""
+    h, w = output.shape[:2]
+    x1, y1 = max(0, x1), max(0, y1)
+    x2, y2 = min(w, x2), min(h, y2)
+    if x2 <= x1 or y2 <= y1:
+        return
+    roi = output[y1:y2, x1:x2].copy()
+    blurred = cv2.GaussianBlur(roi, (k, k), 0)
+    if oval:
+        kh, kw = roi.shape[:2]
+        mask = np.zeros((kh, kw), dtype=np.uint8)
+        center = (kw // 2, kh // 2)
+        axes = (kw // 2, kh // 2)
+        cv2.ellipse(mask, center, axes, 0, 0, 360, 255, -1)
+        mask_3ch = np.expand_dims(mask, axis=2)
+        roi = np.where(mask_3ch > 0, blurred, roi)
+    else:
+        roi = blurred
+    output[y1:y2, x1:x2] = roi
+
+
 def apply_blurs(frame: np.ndarray, events: List[DetectionEvent], config: PipelineConfig) -> np.ndarray:
     """Apply gaussian blur to all detection bounding boxes on the frame."""
     output = frame.copy()
-    
+    k = config.blur_strength
+    k = k if k % 2 == 1 else k + 1
+
     for event in events:
         if not event.blur:
             continue  # whitelisted face — skip
-            
+
         # Check if this event type is enabled in config
         type_enabled = {
             "face": config.blur_faces,
@@ -21,22 +46,11 @@ def apply_blurs(frame: np.ndarray, events: List[DetectionEvent], config: Pipelin
         }
         if not type_enabled.get(event.type, True):
             continue
-        
+
         x1, y1, x2, y2 = event.bbox
-        # Clamp to frame bounds
-        x1, y1 = max(0, x1), max(0, y1)
-        x2, y2 = min(frame.shape[1], x2), min(frame.shape[0], y2)
-        
-        if x2 <= x1 or y2 <= y1:
-            continue
-        
-        roi = output[y1:y2, x1:x2]
-        k = config.blur_strength
-        # kernel must be odd
-        k = k if k % 2 == 1 else k + 1
-        blurred_roi = cv2.GaussianBlur(roi, (k, k), 0)
-        output[y1:y2, x1:x2] = blurred_roi
-    
+        oval = event.type == "face"
+        _blur_region(output, x1, y1, x2, y2, k, oval=oval)
+
     return output
 
 
