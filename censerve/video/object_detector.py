@@ -52,7 +52,7 @@ CARD_NAMES = {
     "identity_card", "valid-credit-card",
 }
 
-INFERENCE_SIZE = 416      # px — increased for better card detection accuracy
+INFERENCE_SIZE = 320      # px — detection resolution
 MOTION_THRESH  = 0.002    # Lowered threshold for more sensitive detection on stream
 
 
@@ -236,10 +236,8 @@ class PlateCardDetector:
         Called every N frames by the video loop.
         Improved tracking for moving objects during screen sharing.
         """
-        # Always run detection if we have cached objects (for better tracking)
-        has_cached = len(self._cached) > 0
-        if not self._has_motion(frame) and not has_cached:
-            return self._cached   # return last known boxes, not empty
+        if not self._has_motion(frame):
+            return self._cached
 
         events = []
 
@@ -255,34 +253,10 @@ class PlateCardDetector:
             except Exception as e:
                 print(f"[ObjDet] card error: {e}")
 
-        # Shape fallback — catches Aadhaar/ID cards YOLO missed (stricter validation)
+        # Shape fallback — only when card model is unavailable
         card_found = any(e.type == "card" for e in events)
-        if not card_found:
-            shape_events = self._cards_by_shape(frame, frame_id)
-            # Apply stricter confidence for shape-based detections
-            for event in shape_events:
-                event.confidence = 0.70  # Higher confidence required for shape fallback
-            events.extend(shape_events)
-
-        # Improved tracking: if we have cached objects and new detections, merge them
-        if has_cached and events:
-            # Simple tracking: use new detections but expand bounding boxes slightly
-            # to cover movement between frames
-            for new_event in events:
-                for cached_event in self._cached:
-                    if new_event.type == cached_event.type:
-                        # Expand new bbox to cover movement area
-                        x1 = min(new_event.bbox[0], cached_event.bbox[0]) - 5
-                        y1 = min(new_event.bbox[1], cached_event.bbox[1]) - 5
-                        x2 = max(new_event.bbox[2], cached_event.bbox[2]) + 5
-                        y2 = max(new_event.bbox[3], cached_event.bbox[3]) + 5
-                        new_event.bbox = (max(0, x1), max(0, y1), x2, y2)
-
-        # Simple debug hook: log any detections so it's obvious when the
-        # models are firing even if blur logic later changes.
-        if events:
-            print(f"[ObjDet] Frame {frame_id}: "
-                  f"{[(e.type, round(e.confidence, 2)) for e in events]}")
+        if self.card_model is None and not card_found:
+            events.extend(self._cards_by_shape(frame, frame_id))
 
         self._cached = events
         return events
